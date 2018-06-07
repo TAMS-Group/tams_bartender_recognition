@@ -53,10 +53,6 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   // filter range
   pcl::ModelCoefficients sphere_coeff;
   sphere_coeff.values.resize (4);
-  sphere_coeff.values[0] = 0;
-  sphere_coeff.values[1] = 0;
-  sphere_coeff.values[2] = 0;
-  sphere_coeff.values[3] = 0;
 
   pcl::ModelOutlierRemoval<pcl::PointXYZRGB> sphere_filter;
   sphere_filter.setModelCoefficients (sphere_coeff);
