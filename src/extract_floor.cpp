@@ -43,6 +43,20 @@ void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, dou
 	t_out.setRotation( t1.getRotation().slerp(t2.getRotation(), fraction) );
 }
 
+void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
+	// filter range
+	pcl::ModelCoefficients sphere_coeff;
+	sphere_coeff.values.resize (4);
+
+	pcl::ModelOutlierRemoval<pcl::PointXYZRGB> sphere_filter;
+	sphere_filter.setModelCoefficients (sphere_coeff);
+	sphere_filter.setThreshold (1.5);
+	sphere_filter.setModelType (pcl::SACMODEL_SPHERE);
+	sphere_filter.setInputCloud (incloud);
+	sphere_filter.filter (outcloud);
+}
+
+
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
@@ -50,16 +64,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::ModelCoefficients::Ptr plane_coefs (new pcl::ModelCoefficients ());
   pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
 
-  // filter range
-  pcl::ModelCoefficients sphere_coeff;
-  sphere_coeff.values.resize (4);
-
-  pcl::ModelOutlierRemoval<pcl::PointXYZRGB> sphere_filter;
-  sphere_filter.setModelCoefficients (sphere_coeff);
-  sphere_filter.setThreshold (1.5);
-  sphere_filter.setModelType (pcl::SACMODEL_SPHERE);
-  sphere_filter.setInputCloud (cloud);
-  sphere_filter.filter (*cloud);
+  filterRange(1.5, cloud, *cloud);
 
   // starting the segmentation of planar components.
   pcl::SACSegmentation<pcl::PointXYZRGB> seg;
