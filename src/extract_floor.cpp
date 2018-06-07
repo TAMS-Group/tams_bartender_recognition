@@ -56,26 +56,34 @@ void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
 	sphere_filter.filter (outcloud);
 }
 
+bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr plane_coefs) {
+	pcl::SACSegmentation<pcl::PointXYZRGB> seg;
+	seg.setOptimizeCoefficients (true);
+	seg.setModelType (pcl::SACMODEL_PLANE);
+	seg.setMethodType (pcl::SAC_RANSAC);
+	seg.setMaxIterations (1000);
+	seg.setDistanceThreshold (0.01);
+	seg.setInputCloud (cloud);
+
+	seg.segment(*inliers, *plane_coefs);
+
+	// success if there are any inliers
+	return inliers->indices.size() > 0;
+}
+
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
 
-  pcl::ModelCoefficients::Ptr plane_coefs (new pcl::ModelCoefficients ());
-  pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
-
+  // filter range of view
   filterRange(1.5, cloud, *cloud);
 
-  // starting the segmentation of planar components.
-  pcl::SACSegmentation<pcl::PointXYZRGB> seg;
-  seg.setOptimizeCoefficients (true);
-  seg.setModelType (pcl::SACMODEL_PLANE);
-  seg.setMethodType (pcl::SAC_RANSAC);
-  seg.setMaxIterations (1000);
-  seg.setDistanceThreshold (0.01);
-  seg.setInputCloud (cloud);
-    
-  seg.segment(*inliers, *plane_coefs);
+  // segment the surface and get coefficients
+  pcl::ModelCoefficients::Ptr plane_coefs (new pcl::ModelCoefficients ());
+  pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
+  // segment the surface
+  if (!segmentSurface(cloud, inliers, plane_coefs)) return;
 
   // normalize coefficients and flip orientation if normal points away from camera
   plane_coefs->values[3] = -plane_coefs->values[3];
@@ -89,7 +97,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   std::cerr << "Plane coefficients: " << *plane_coefs<< std::endl;
 
   // Exit if no plane found
-  if (inliers->indices.size() == 0) return;
+
 
   // publish plane coefficients
   std_msgs::Float32MultiArray coef_msg;
