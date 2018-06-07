@@ -23,11 +23,5 @@ include_directories(
 	${catkin_INCLUDE_DIRS}
 )
 
-add_executable(extract_floor src/extract_floor.cpp)
-target_link_libraries(extract_floor ${catkin_LIBRARIES})
-
-add_executable(cylinder_segment src/cylinder_segment.cpp)
-target_link_libraries(cylinder_segment ${catkin_LIBRARIES})
-
-add_executable(handle_segments src/handle_cylinder_segments.cpp)
-target_link_libraries(handle_segments ${catkin_LIBRARIES})
+add_executable(pcl_bottle_recognition src/bottle_recognition.cpp)
+target_link_libraries(pcl_bottle_recognition ${catkin_LIBRARIES})

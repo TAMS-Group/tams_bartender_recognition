@@ -5,6 +5,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+
 #include <sensor_msgs/PointCloud2.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/point_cloud.h>
@@ -17,6 +18,8 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
+#include <pcl/features/normal_3d.h>
+
 
 #include <iostream>
 #include <pcl/io/pcd_io.h>
@@ -24,6 +27,7 @@
 #include <pcl/filters/model_outlier_removal.h>
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/statistical_outlier_removal.h>
+#include <pcl/filters/passthrough.h>
 
 #include <std_msgs/Float32MultiArray.h>
 #include <tf/tf.h>
@@ -31,16 +35,31 @@
 #include <tf/transform_broadcaster.h>
 #include <tf_conversions/tf_eigen.h>
 
+#include <visualization_msgs/Marker.h>
 
 
-ros::Publisher pub;
+
+ros::Publisher surface_pub, coef_pub, cyl_pub, cyl_marker_pub;
 std::string surface_frame = "/surface";
+std::string bottle_frame = "/bottle";
 bool has_surface_transform = false;
+bool has_cylinder_transform = false;
 tf::Transform surface_tf;
+tf::Transform cyl_tf;
+
 
 void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, double fraction, tf::Transform& t_out){
 	t_out.setOrigin( t1.getOrigin()*(1-fraction) + t2.getOrigin()*fraction );
 	t_out.setRotation( t1.getRotation().slerp(t2.getRotation(), fraction) );
+}
+
+void estimateNormals(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointCloud<pcl::Normal>& normals) {
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB> ());
+	pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;
+	ne.setSearchMethod (tree);
+	ne.setInputCloud (cloud);
+	ne.setKSearch (50);
+	ne.compute (normals);
 }
 
 void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
@@ -93,6 +112,48 @@ bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Poi
 
 	// success if there are any inliers
 	return inliers->indices.size() > 0;
+}
+
+bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const pcl::PointCloud<pcl::Normal>::Ptr normals, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr coefficients) {
+
+  pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg;
+  seg.setOptimizeCoefficients (true);
+  seg.setModelType (pcl::SACMODEL_CYLINDER);
+  seg.setMethodType (pcl::SAC_RANSAC);
+  seg.setNormalDistanceWeight (0.1);
+  seg.setMaxIterations (10000);
+  seg.setDistanceThreshold (0.05);
+  seg.setRadiusLimits (0.035, 0.045);
+  seg.setInputCloud (cloud);
+  seg.setInputNormals (normals);
+
+  // Obtain the cylinder inliers and coefficients
+  seg.segment (*inliers, *coefficients);
+  return inliers->indices.size() > 0;
+
+  /*
+
+     pcl::ModelCoefficients::Ptr coefficients_cylinder (new pcl::ModelCoefficients);
+     pcl::PointIndices::Ptr inliers_cylinder (new pcl::PointIndices);
+     pcl::SampleConsensusModelCylinder<pcl::PointXYZRGB, pcl::Normal>::Ptr
+     cylinder_model(new pcl::SampleConsensusModelCylinder<pcl::PointXYZRGB, pcl::Normal> (cloud_filtered));
+     cylinder_model->setAxis(Eigen::Vector3f(0, 0, 1));
+     cylinder_model->setRadiusLimits (0.035, 0.045);
+     cylinder_model->setInputCloud(cloud_filtered);
+     cylinder_model->setInputNormals(cloud_normals);
+     pcl::RandomSampleConsensus<pcl::PointXYZRGB> ransac(cylinder_model);
+     ransac.setDistanceThreshold(0.0);
+     ransac.computeModel();
+     ransac.getInliers(inliers_cylinder->indices);
+     Eigen::VectorXf coefs;
+     ransac.getModelCoefficients(coefs);
+     if(coefs.size() == 4) {
+     coefficients_cylinder->values[0] = coefs[0];
+     coefficients_cylinder->values[1] = coefs[1];
+     coefficients_cylinder->values[2] = coefs[2];
+     coefficients_cylinder->values[3] = coefs[3];
+     }
+     */
 }
 
 void transformPointCloud(const tf::Transform transform, const std::string& frame_id, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
@@ -192,7 +253,79 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   // publish segmented surface cloud
   pcl::PCLPointCloud2 outcloud;
   pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
-  pub.publish (outcloud);
+  surface_pub.publish (outcloud);
+
+
+  // Estimate point normals
+  pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
+  estimateNormals(surfaceCloud, *cloud_normals);
+
+  // Create the segmentation object for cylinder segmentation and set all the parameters
+  pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
+  pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
+  std::vector<geometry_msgs::Pose> cylinder_poses;
+
+  int max_count = 5;
+  int bottle_count = 0;
+
+  while(bottle_count < max_count && segmentCylinder(surfaceCloud, cloud_normals, cyl_inliers, cyl_coefs)) {
+	  std::cerr << "Cylinder coefficients: " << *cyl_coefs<< std::endl;
+	  // publish cylinder coefficients
+	  std_msgs::Float32MultiArray coef_msg;
+	  coef_msg.data = cyl_coefs->values;
+	  coef_pub.publish(coef_msg);
+
+	  double bottle_radius = cyl_coefs->values[6];
+	  double bottle_height = 0.3;
+
+	  pcl::ModelOutlierRemoval<pcl::PointXYZRGB> cyl_filter;
+	  cyl_coefs->values[6] = cyl_coefs->values[6] + 0.015; // add padding
+	  cyl_filter.setModelCoefficients (*cyl_coefs);
+	  cyl_filter.setModelType (pcl::SACMODEL_CYLINDER);
+	  cyl_filter.setInputCloud (surfaceCloud);
+	  cyl_filter.filter (*surfaceCloud);
+
+	  geometry_msgs::PoseStamped pose;
+	  pose.header.frame_id = surfaceCloud->header.frame_id;
+
+	  // we are only interested in the x/y coordinates
+	  pose.pose.position.x = cyl_coefs->values[0];
+	  pose.pose.position.y = cyl_coefs->values[1];
+
+	  // bottle height and orientation are fixed for now
+	  pose.pose.position.z = 0.5*bottle_height;
+	  pose.pose.orientation.w = 1.0;
+
+	  tf::Transform new_tf;
+	  tf::poseMsgToTF(pose.pose, new_tf);
+
+	  if(has_cylinder_transform) {
+		  interpolateTransforms(cyl_tf, new_tf, 0.1, new_tf);
+	  }
+	  cyl_tf = new_tf;
+	  static tf::TransformBroadcaster tf_broadcaster;
+	  tf_broadcaster.sendTransform(tf::StampedTransform(cyl_tf, ros::Time::now(), surfaceCloud->header.frame_id, bottle_frame));
+	  has_cylinder_transform = true;
+
+	  visualization_msgs::Marker cyl;
+	  cyl.header.frame_id = bottle_frame;
+	  cyl.header.stamp = ros::Time();
+	  cyl.ns = "";
+	  cyl.id = 0;
+	  cyl.type = visualization_msgs::Marker::CYLINDER;
+	  cyl.action = visualization_msgs::Marker::ADD;
+	  cyl.scale.x = 2 * bottle_radius;
+	  cyl.scale.y = 2 * bottle_radius;
+	  cyl.scale.z = 0.3;
+	  cyl.color.a = 0.2;
+	  cyl.color.g = 1.0;
+	  cyl.pose.orientation.w = 1.0;
+	  cyl_marker_pub.publish (cyl);
+	  break;
+  }
+
+  pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
+  cyl_pub.publish (outcloud);
 }
 
 
@@ -206,8 +339,13 @@ int main (int argc, char** argv)
   // Create a ROS subscriber for the input point cloud
   ros::Subscriber sub = nh.subscribe ("/camera/depth_registered/points", 1, callback);
 
+
   // Create a ROS publisher for the output point cloud
-  pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
+  surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
+  cyl_pub = nh.advertise<sensor_msgs::PointCloud2> ("/cylinder_filtered", 1);
+  cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
+
+  coef_pub = nh.advertise<std_msgs::Float32MultiArray> ("/cylinder_coefficients", 1);
 
   // Spin
   ros::spin();
