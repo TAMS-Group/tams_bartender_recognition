@@ -333,7 +333,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 int main (int argc, char** argv)
 {
   // Initialize ROS
-  ros::init (argc, argv, "remove_floor");
+  ros::init (argc, argv, "pcl_bottle_recognition");
   ros::NodeHandle nh;
 
   // Create a ROS subscriber for the input point cloud
