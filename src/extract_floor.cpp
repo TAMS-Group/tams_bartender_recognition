@@ -33,7 +33,7 @@
 
 
 
-ros::Publisher pub, coef_pub;
+ros::Publisher pub;
 std::string surface_frame = "/surface";
 bool has_surface_transform = false;
 tf::Transform plane_tf;
@@ -129,12 +129,6 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   std::cerr << "Plane coefficients: " << *plane_coefs<< std::endl;
 
 
-  // publish plane coefficients
-  std_msgs::Float32MultiArray coef_msg;
-  coef_msg.data = plane_coefs->values;
-  coef_pub.publish(coef_msg);
-
-
   // retrieve pose of surface
   geometry_msgs::Pose pose = getSurfacePoseFromCoefficients(plane_coefs);
 
@@ -193,7 +187,6 @@ int main (int argc, char** argv)
 
   // Create a ROS publisher for the output point cloud
   pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
-  coef_pub = nh.advertise<std_msgs::Float32MultiArray> ("plane_coefficients", 1);
 
   // Spin
   ros::spin();
