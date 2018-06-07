@@ -47,7 +47,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
 
-  pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients ());
+  pcl::ModelCoefficients::Ptr plane_coefs (new pcl::ModelCoefficients ());
   pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
 
   // filter range
@@ -74,30 +74,31 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   seg.setDistanceThreshold (0.01);
   seg.setInputCloud (cloud);
     
-  seg.segment(*inliers, *coefficients);
+  seg.segment(*inliers, *plane_coefs);
 
-  // normalize coefficients
-  coefficients->values[3] = -coefficients->values[3];
-  if(coefficients->values[2] > 0 && coefficients->values[3] > 0) {
-  	coefficients->values[0] = -coefficients->values[0];
-  	coefficients->values[1] = -coefficients->values[1];
-  	coefficients->values[2] = -coefficients->values[2];
-  	coefficients->values[3] = -coefficients->values[3];
+  // normalize coefficients and flip orientation if normal points away from camera
+  plane_coefs->values[3] = -plane_coefs->values[3];
+  if(plane_coefs->values[2] > 0 && plane_coefs->values[3] > 0) {
+    plane_coefs->values[0] = -plane_coefs->values[0];
+    plane_coefs->values[1] = -plane_coefs->values[1];
+    plane_coefs->values[2] = -plane_coefs->values[2];
+    plane_coefs->values[3] = -plane_coefs->values[3];
   }
-  std::cerr << "Plane coefficients: " << *coefficients<< std::endl;
+
+  std::cerr << "Plane coefficients: " << *plane_coefs<< std::endl;
 
   // Exit if no plane found
   if (inliers->indices.size() == 0) return;
 
   // publish plane coefficients
   std_msgs::Float32MultiArray coef_msg;
-  coef_msg.data = coefficients->values;
+  coef_msg.data = plane_coefs->values;
   coef_pub.publish(coef_msg);
 
-  float a = coefficients->values[0];
-  float b = coefficients->values[1];
-  float c = coefficients->values[2];
-  float d = coefficients->values[3];
+  float a = plane_coefs->values[0];
+  float b = plane_coefs->values[1];
+  float c = plane_coefs->values[2];
+  float d = plane_coefs->values[3];
 
   float sqrt_abc = std::sqrt(std::pow(a,2) + std::pow(b,2) + std::pow(c,2));
   float p = d / sqrt_abc;
