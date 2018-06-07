@@ -56,6 +56,22 @@ void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
 	sphere_filter.filter (outcloud);
 }
 
+void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
+	float a = plane_coefs->values[0];
+	float b = plane_coefs->values[1];
+	float c = plane_coefs->values[2];
+	float d = plane_coefs->values[3];
+	float sqrt_abc = std::sqrt(std::pow(a,2) + std::pow(b,2) + std::pow(c,2));
+	float p = d / sqrt_abc;
+
+	for(pcl::PointXYZRGB point : *incloud) {
+		float point_distance = (point.x * a + point.y * b + point.z * c - d / sqrt_abc);
+		if(0.03 < point_distance && point_distance < 0.25) {
+			outcloud.push_back(point);
+		}
+	}
+}
+
 bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr plane_coefs) {
 	pcl::SACSegmentation<pcl::PointXYZRGB> seg;
 	seg.setOptimizeCoefficients (true);
@@ -108,6 +124,19 @@ geometry_msgs::Pose getSurfacePoseFromCoefficients(pcl::ModelCoefficients::Ptr p
 	return pose;
 }
 
+void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string& cloud_frame, const std::string& surface_frame) {
+
+  tf::Transform new_tf;
+  tf::poseMsgToTF(pose, new_tf);
+  if(has_surface_transform) {
+	  interpolateTransforms(plane_tf, new_tf, 0.1, new_tf);
+  }
+  plane_tf = new_tf;
+  static tf::TransformBroadcaster tf_broadcaster;
+  tf_broadcaster.sendTransform(tf::StampedTransform(plane_tf, ros::Time::now(), cloud_frame, surface_frame));
+  has_surface_transform = true;
+}
+
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -124,51 +153,40 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   if (!segmentSurface(cloud, inliers, plane_coefs)) return;
 
 
-  // normalize coefficients and flip orientation if normal points away from camera
+  // normalize coefficients and flip orientation if surface normal points away from camera
   normalizeSurfaceCoefficients(plane_coefs);
   std::cerr << "Plane coefficients: " << *plane_coefs<< std::endl;
 
 
   // retrieve pose of surface
-  geometry_msgs::Pose pose = getSurfacePoseFromCoefficients(plane_coefs);
+  geometry_msgs::Pose surface_pose = getSurfacePoseFromCoefficients(plane_coefs);
 
-  float a = plane_coefs->values[0];
-  float b = plane_coefs->values[1];
-  float c = plane_coefs->values[2];
-  float d = plane_coefs->values[3];
-  float sqrt_abc = std::sqrt(std::pow(a,2) + std::pow(b,2) + std::pow(c,2));
-  float p = d / sqrt_abc;
 
-  tf::Transform new_tf;
-  tf::poseMsgToTF(pose, new_tf);
-  if(has_surface_transform) {
-	  interpolateTransforms(plane_tf, new_tf, 0.1, new_tf);
-  }
-  plane_tf = new_tf;
-  static tf::TransformBroadcaster tf_broadcaster;
-  tf_broadcaster.sendTransform(tf::StampedTransform(plane_tf, ros::Time::now(), cloud->header.frame_id, surface_frame));
-  has_surface_transform = true;
+  // publish surface pose as surface_frame to /tf
+  publishSurfaceTransform(surface_pose, cloud->header.frame_id, surface_frame);
 
+
+  // filter point cloud to region above surface
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-  surfaceCloud->header.frame_id = surface_frame;
-  for(pcl::PointXYZRGB point : *cloud) {
-	  float point_distance = (point.x * a + point.y * b + point.z * c - d / sqrt_abc);
-	  if(0.03 < point_distance && point_distance < 0.25) {
-		  surfaceCloud->push_back(point);
-	  }
-  }
+  filterAboveSurface(plane_coefs, cloud, *surfaceCloud);
 
-  // Executing the transformation
+
+  // transform the surfaceCloud to surface_frame
   Eigen::Affine3d surface_affine = Eigen::Affine3d::Identity();
   tf::transformTFToEigen(plane_tf, surface_affine);
   pcl::transformPointCloud (*surfaceCloud, *surfaceCloud, surface_affine.inverse());
+  surfaceCloud->header.frame_id = surface_frame;
 
+
+  // remove statistical outliers
   pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
   sor.setInputCloud (surfaceCloud);
   sor.setMeanK (50);
   sor.setStddevMulThresh (1.0);
   sor.filter (*surfaceCloud);
 
+
+  // publish segmented surface cloud
   pcl::PCLPointCloud2 outcloud;
   pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
   pub.publish (outcloud);
