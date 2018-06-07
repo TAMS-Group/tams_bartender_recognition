@@ -36,7 +36,7 @@
 ros::Publisher pub;
 std::string surface_frame = "/surface";
 bool has_surface_transform = false;
-tf::Transform plane_tf;
+tf::Transform surface_tf;
 
 void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, double fraction, tf::Transform& t_out){
 	t_out.setOrigin( t1.getOrigin()*(1-fraction) + t2.getOrigin()*fraction );
@@ -50,7 +50,7 @@ void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
 
 	pcl::ModelOutlierRemoval<pcl::PointXYZRGB> sphere_filter;
 	sphere_filter.setModelCoefficients (sphere_coeff);
-	sphere_filter.setThreshold (1.5);
+	sphere_filter.setThreshold (range);
 	sphere_filter.setModelType (pcl::SACMODEL_SPHERE);
 	sphere_filter.setInputCloud (incloud);
 	sphere_filter.filter (outcloud);
@@ -72,6 +72,14 @@ void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl
 	}
 }
 
+void removeStatisticalOutliers(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
+	pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
+	sor.setInputCloud (incloud);
+	sor.setMeanK (50);
+	sor.setStddevMulThresh (1.0);
+	sor.filter (outcloud);
+}
+
 bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr plane_coefs) {
 	pcl::SACSegmentation<pcl::PointXYZRGB> seg;
 	seg.setOptimizeCoefficients (true);
@@ -85,6 +93,13 @@ bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Poi
 
 	// success if there are any inliers
 	return inliers->indices.size() > 0;
+}
+
+void transformPointCloud(const tf::Transform transform, const std::string& frame_id, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
+	Eigen::Affine3d surface_affine = Eigen::Affine3d::Identity();
+	tf::transformTFToEigen(transform, surface_affine);
+	pcl::transformPointCloud (*incloud, outcloud, surface_affine.inverse());
+	outcloud.header.frame_id = frame_id;
 }
 
 void normalizeSurfaceCoefficients(pcl::ModelCoefficients::Ptr plane_coefs) {
@@ -129,11 +144,11 @@ void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string&
   tf::Transform new_tf;
   tf::poseMsgToTF(pose, new_tf);
   if(has_surface_transform) {
-	  interpolateTransforms(plane_tf, new_tf, 0.1, new_tf);
+	  interpolateTransforms(surface_tf, new_tf, 0.1, new_tf);
   }
-  plane_tf = new_tf;
+  surface_tf = new_tf;
   static tf::TransformBroadcaster tf_broadcaster;
-  tf_broadcaster.sendTransform(tf::StampedTransform(plane_tf, ros::Time::now(), cloud_frame, surface_frame));
+  tf_broadcaster.sendTransform(tf::StampedTransform(surface_tf, ros::Time::now(), cloud_frame, surface_frame));
   has_surface_transform = true;
 }
 
@@ -142,49 +157,37 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
 
+  //
+  //         Extract surface transform and filter points in the region above it
+  //
 
   // filter range of view
   filterRange(1.5, cloud, *cloud);
 
-
   // segment the surface and get coefficients
-  pcl::ModelCoefficients::Ptr plane_coefs (new pcl::ModelCoefficients ());
+  pcl::ModelCoefficients::Ptr surface_coefs (new pcl::ModelCoefficients ());
   pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
-  if (!segmentSurface(cloud, inliers, plane_coefs)) return;
-
+  if (!segmentSurface(cloud, inliers, surface_coefs)) return;
 
   // normalize coefficients and flip orientation if surface normal points away from camera
-  normalizeSurfaceCoefficients(plane_coefs);
-  std::cerr << "Plane coefficients: " << *plane_coefs<< std::endl;
-
+  normalizeSurfaceCoefficients(surface_coefs);
+  std::cerr << "Plane coefficients: " << *surface_coefs<< std::endl;
 
   // retrieve pose of surface
-  geometry_msgs::Pose surface_pose = getSurfacePoseFromCoefficients(plane_coefs);
-
+  geometry_msgs::Pose surface_pose = getSurfacePoseFromCoefficients(surface_coefs);
 
   // publish surface pose as surface_frame to /tf
   publishSurfaceTransform(surface_pose, cloud->header.frame_id, surface_frame);
 
-
   // filter point cloud to region above surface
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-  filterAboveSurface(plane_coefs, cloud, *surfaceCloud);
-
+  filterAboveSurface(surface_coefs, cloud, *surfaceCloud);
 
   // transform the surfaceCloud to surface_frame
-  Eigen::Affine3d surface_affine = Eigen::Affine3d::Identity();
-  tf::transformTFToEigen(plane_tf, surface_affine);
-  pcl::transformPointCloud (*surfaceCloud, *surfaceCloud, surface_affine.inverse());
-  surfaceCloud->header.frame_id = surface_frame;
-
+  transformPointCloud(surface_tf, surface_frame, surfaceCloud, *surfaceCloud);
 
   // remove statistical outliers
-  pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
-  sor.setInputCloud (surfaceCloud);
-  sor.setMeanK (50);
-  sor.setStddevMulThresh (1.0);
-  sor.filter (*surfaceCloud);
-
+  removeStatisticalOutliers(surfaceCloud, *surfaceCloud);
 
   // publish segmented surface cloud
   pcl::PCLPointCloud2 outcloud;
