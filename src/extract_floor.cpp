@@ -71,32 +71,62 @@ bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Poi
 	return inliers->indices.size() > 0;
 }
 
+void normalizeSurfaceCoefficients(pcl::ModelCoefficients::Ptr plane_coefs) {
+	plane_coefs->values[3] = -plane_coefs->values[3];
+	if(plane_coefs->values[2] > 0 && plane_coefs->values[3] > 0) {
+		plane_coefs->values[0] = -plane_coefs->values[0];
+		plane_coefs->values[1] = -plane_coefs->values[1];
+		plane_coefs->values[2] = -plane_coefs->values[2];
+		plane_coefs->values[3] = -plane_coefs->values[3];
+	}
+}
+
+geometry_msgs::Pose getSurfacePoseFromCoefficients(pcl::ModelCoefficients::Ptr plane_coefs) {
+	geometry_msgs::Pose pose;
+	float a = plane_coefs->values[0];
+	float b = plane_coefs->values[1];
+	float c = plane_coefs->values[2];
+	float d = plane_coefs->values[3];
+
+	float sqrt_abc = std::sqrt(std::pow(a,2) + std::pow(b,2) + std::pow(c,2));
+	float p = d / sqrt_abc;
+
+	tf::Vector3 normal(a / sqrt_abc, b / sqrt_abc, c / sqrt_abc);
+
+	pose.position.x = p * normal[0];
+	pose.position.y = p * normal[1];
+	pose.position.z = p * normal[2];
+
+	tf::Vector3 up(0.0, 0.0, 1.0);
+	tf::Vector3 norm=normal.cross(up).normalized();
+	float up_angle = -1.0 * std::acos(normal.dot(up));
+	tf::Quaternion q(norm, up_angle);
+	q.normalize();
+	norm = q.getAxis();
+	up_angle = q.getAngle();
+	tf::quaternionTFToMsg(q, pose.orientation);
+	return pose;
+}
+
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
   pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
 
+
   // filter range of view
   filterRange(1.5, cloud, *cloud);
+
 
   // segment the surface and get coefficients
   pcl::ModelCoefficients::Ptr plane_coefs (new pcl::ModelCoefficients ());
   pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
-  // segment the surface
   if (!segmentSurface(cloud, inliers, plane_coefs)) return;
 
+
   // normalize coefficients and flip orientation if normal points away from camera
-  plane_coefs->values[3] = -plane_coefs->values[3];
-  if(plane_coefs->values[2] > 0 && plane_coefs->values[3] > 0) {
-    plane_coefs->values[0] = -plane_coefs->values[0];
-    plane_coefs->values[1] = -plane_coefs->values[1];
-    plane_coefs->values[2] = -plane_coefs->values[2];
-    plane_coefs->values[3] = -plane_coefs->values[3];
-  }
-
+  normalizeSurfaceCoefficients(plane_coefs);
   std::cerr << "Plane coefficients: " << *plane_coefs<< std::endl;
-
-  // Exit if no plane found
 
 
   // publish plane coefficients
@@ -104,29 +134,16 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   coef_msg.data = plane_coefs->values;
   coef_pub.publish(coef_msg);
 
+
+  // retrieve pose of surface
+  geometry_msgs::Pose pose = getSurfacePoseFromCoefficients(plane_coefs);
+
   float a = plane_coefs->values[0];
   float b = plane_coefs->values[1];
   float c = plane_coefs->values[2];
   float d = plane_coefs->values[3];
-
   float sqrt_abc = std::sqrt(std::pow(a,2) + std::pow(b,2) + std::pow(c,2));
   float p = d / sqrt_abc;
-
-  tf::Vector3 normal(a / sqrt_abc, b / sqrt_abc, c / sqrt_abc);
-
-  geometry_msgs::Pose pose;
-  pose.position.x = p * normal[0];
-  pose.position.y = p * normal[1];
-  pose.position.z = p * normal[2];
-
-  tf::Vector3 up(0.0, 0.0, 1.0);
-  tf::Vector3 norm=normal.cross(up).normalized();
-  float up_angle = -1.0 * std::acos(normal.dot(up));
-  tf::Quaternion q(norm, up_angle);
-  q.normalize();
-  norm = q.getAxis();
-  up_angle = q.getAngle();
-  tf::quaternionTFToMsg(q, pose.orientation);
 
   tf::Transform new_tf;
   tf::poseMsgToTF(pose, new_tf);
