@@ -47,6 +47,8 @@ bool has_cylinder_transform = false;
 tf::Transform surface_tf;
 tf::Transform cyl_tf;
 
+std::map<int,tf::Transform> bottle_transforms;
+
 
 void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, double fraction, tf::Transform& t_out){
 	t_out.setOrigin( t1.getOrigin()*(1-fraction) + t2.getOrigin()*fraction );
@@ -303,13 +305,11 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 	  tf::Transform new_tf;
 	  tf::poseMsgToTF(pose.pose, new_tf);
 
-	  /*
-	  if(has_cylinder_transform) {
-		  interpolateTransforms(cyl_tf, new_tf, 0.1, new_tf);
+	  if(bottle_transforms.find(bottle_count) != bottle_transforms.end()) {
+		  interpolateTransforms(bottle_transforms[bottle_count], new_tf, 0.1, new_tf);
 	  }
-	  has_cylinder_transform = true;
-	  cyl_tf = new_tf;
-	  */
+	  bottle_transforms[bottle_count] = new_tf;
+
 	  static tf::TransformBroadcaster tf_broadcaster;
 	  tf_broadcaster.sendTransform(tf::StampedTransform(new_tf, ros::Time::now(), surfaceCloud->header.frame_id, bottle_frame_id));
 
