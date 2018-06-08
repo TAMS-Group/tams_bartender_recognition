@@ -273,11 +273,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
   while(bottle_count < max_count && segmentCylinder(surfaceCloud, cloud_normals, cyl_inliers, cyl_coefs)) {
 	  std::cerr << "Cylinder coefficients: " << *cyl_coefs<< std::endl;
-	  // publish cylinder coefficients
-	  std_msgs::Float32MultiArray coef_msg;
-	  coef_msg.data = cyl_coefs->values;
-	  coef_pub.publish(coef_msg);
-
+	  
 	  double bottle_radius = cyl_coefs->values[6];
 	  double bottle_height = 0.3;
 	  std::string bottle_frame_id = bottle_frame + std::to_string(bottle_count);
