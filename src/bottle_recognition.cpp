@@ -39,7 +39,7 @@
 
 
 
-ros::Publisher surface_pub, coef_pub, cyl_pub, cyl_marker_pub;
+ros::Publisher surface_pub, cyl_pub, cyl_marker_pub;
 std::string surface_frame = "/surface";
 std::string bottle_frame = "/bottle";
 bool has_surface_transform = false;
@@ -352,8 +352,6 @@ int main (int argc, char** argv)
   surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
   cyl_pub = nh.advertise<sensor_msgs::PointCloud2> ("/cylinder_filtered", 1);
   cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
-
-  coef_pub = nh.advertise<std_msgs::Float32MultiArray> ("/cylinder_coefficients", 1);
 
   // Spin
   ros::spin();
