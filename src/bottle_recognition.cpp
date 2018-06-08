@@ -116,13 +116,14 @@ bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Poi
 
 bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const pcl::PointCloud<pcl::Normal>::Ptr normals, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr coefficients) {
 
+
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg;
   seg.setOptimizeCoefficients (true);
   seg.setModelType (pcl::SACMODEL_CYLINDER);
   seg.setMethodType (pcl::SAC_RANSAC);
   seg.setNormalDistanceWeight (0.1);
   seg.setMaxIterations (10000);
-  seg.setDistanceThreshold (0.05);
+  seg.setDistanceThreshold (0.08);
   seg.setRadiusLimits (0.035, 0.045);
   seg.setInputCloud (cloud);
   seg.setInputNormals (normals);
@@ -277,14 +278,17 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
 	  double bottle_radius = cyl_coefs->values[6];
 	  double bottle_height = 0.3;
+	  std::string bottle_frame_id = bottle_frame + std::to_string(bottle_count);
 
 	  pcl::ModelOutlierRemoval<pcl::PointXYZRGB> cyl_filter;
-	  cyl_coefs->values[6] = cyl_coefs->values[6] + 0.015; // add padding
 	  cyl_filter.setModelCoefficients (*cyl_coefs);
 	  cyl_filter.setModelType (pcl::SACMODEL_CYLINDER);
+	  cyl_filter.setThreshold(0.05);
+	  cyl_filter.setNegative(true);
+	  cyl_filter.setInputNormals(cloud_normals);
 	  cyl_filter.setInputCloud (surfaceCloud);
 	  cyl_filter.filter (*surfaceCloud);
-
+	  
 	  geometry_msgs::PoseStamped pose;
 	  pose.header.frame_id = surfaceCloud->header.frame_id;
 
@@ -299,19 +303,21 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 	  tf::Transform new_tf;
 	  tf::poseMsgToTF(pose.pose, new_tf);
 
+	  /*
 	  if(has_cylinder_transform) {
 		  interpolateTransforms(cyl_tf, new_tf, 0.1, new_tf);
 	  }
-	  cyl_tf = new_tf;
-	  static tf::TransformBroadcaster tf_broadcaster;
-	  tf_broadcaster.sendTransform(tf::StampedTransform(cyl_tf, ros::Time::now(), surfaceCloud->header.frame_id, bottle_frame));
 	  has_cylinder_transform = true;
+	  cyl_tf = new_tf;
+	  */
+	  static tf::TransformBroadcaster tf_broadcaster;
+	  tf_broadcaster.sendTransform(tf::StampedTransform(new_tf, ros::Time::now(), surfaceCloud->header.frame_id, bottle_frame_id));
 
 	  visualization_msgs::Marker cyl;
-	  cyl.header.frame_id = bottle_frame;
+	  cyl.header.frame_id = bottle_frame_id;
 	  cyl.header.stamp = ros::Time();
-	  cyl.ns = "";
-	  cyl.id = 0;
+	  cyl.ns = "/bottles";
+	  cyl.id = bottle_count;
 	  cyl.type = visualization_msgs::Marker::CYLINDER;
 	  cyl.action = visualization_msgs::Marker::ADD;
 	  cyl.scale.x = 2 * bottle_radius;
@@ -321,7 +327,13 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 	  cyl.color.g = 1.0;
 	  cyl.pose.orientation.w = 1.0;
 	  cyl_marker_pub.publish (cyl);
-	  break;
+
+	  if(surfaceCloud->size()== 0) {
+		  break;
+	  }
+
+	  bottle_count += 1;
+	  estimateNormals(surfaceCloud, *cloud_normals);
   }
 
   pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
