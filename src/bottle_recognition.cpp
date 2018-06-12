@@ -39,8 +39,20 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud2.h>
 
+#include <orbbec_astra_ip/SegmentedBottle.h>
+#include <orbbec_astra_ip/SegmentedBottleArray.h>
 
-ros::Publisher surface_pub, cyl_pub, cyl_marker_pub, image_pub;
+struct BoundingBox {
+    float x;
+    float y;
+    float z;
+    float width;
+    float height;
+    float depth;
+};
+
+
+ros::Publisher surface_pub, cyl_pub, cyl_marker_pub, image_pub, bottles_pub;
 std::string surface_frame = "/surface";
 std::string bottle_frame = "/bottle";
 bool has_surface_transform = false;
@@ -76,7 +88,6 @@ void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
     sphere_filter.setThreshold (range);
     sphere_filter.setModelType (pcl::SACMODEL_SPHERE);
     sphere_filter.setInputCloud (incloud);
-    //sphere_filter.setKeepOrganized(true);
     sphere_filter.filter (outcloud);
 }
 
@@ -225,29 +236,104 @@ void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string&
     has_surface_transform = true;
 }
 
+void index_to_xy(int index, int width, int &x, int &y) {
+    x = index % width;
+    y = index / width;
+}
+
+sensor_msgs::Image cutoutImage(const sensor_msgs::Image *image,
+        BoundingBox bb, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud) {
+
+    // Bounding Box
+    Eigen::Vector4f min(bb.x - 0.5*bb.width, bb.y - 0.5*bb.height, bb.z - 0.5*bb.depth, 1.0);
+    Eigen::Vector4f max(bb.x + 0.5*bb.width, bb.y + 0.5*bb.height, bb.z +0.5*bb.depth, 1.0);
+    pcl::IndicesPtr indices(new std::vector<int>);
+    pcl::CropBox<pcl::PointXYZRGB> box_cropper;
+    box_cropper.setInputCloud(cloud);
+    box_cropper.setMin(min);
+    box_cropper.setMax(max);
+    box_cropper.setKeepOrganized(true);
+    box_cropper.filter(*indices);
+
+    // Image
+    double cloud_image_i_ratio = (double) (image->width * image->height) / (double) (cloud->width * cloud->height);
+    int image_min_x = std::numeric_limits<int>::max();
+    int image_min_y = std::numeric_limits<int>::max();
+    int image_max_x = std::numeric_limits<int>::min();
+    int image_max_y = std::numeric_limits<int>::min();
+    for (auto cloud_index : *indices) {
+        auto image_index = (int) ((double) cloud_index * cloud_image_i_ratio);
+        int image_x, image_y;
+        index_to_xy(image_index, image->width, image_x, image_y);
+        if (image_x < image_min_x) {
+            image_min_x = image_x;
+        }
+        if (image_y < image_min_y) {
+            image_min_y = image_y;
+        }
+        if (image_x > image_max_x) {
+            image_max_x = image_x;
+        }
+        if (image_y > image_max_y) {
+            image_max_y = image_y;
+        }
+    }
+
+    auto width = (unsigned) (abs(image_max_x - image_min_x));
+    auto height = (unsigned) (abs(image_max_y - image_min_y));
+    auto step = 3;
+
+    sensor_msgs::Image output_image;
+    output_image.header.seq = image->header.seq;
+    output_image.header.stamp = image->header.stamp;
+    output_image.header.frame_id = image->header.frame_id;
+    output_image.width = width;
+    output_image.height = height;
+    output_image.encoding = image->encoding;
+    output_image.is_bigendian = image->is_bigendian;
+    output_image.step = step * width;
+
+    for (int i = 0; i < (image->width * image->height); i++) {
+        int x, y;
+        index_to_xy(i, image->width, x, y);
+
+        if (x >= image_min_x && x < image_max_x && y >= image_min_y && y < image_max_y) {
+            output_image.data.push_back(image->data[i * step]);
+            output_image.data.push_back(image->data[i * step + 1]);
+            output_image.data.push_back(image->data[i * step + 2]);
+        }
+    }
+
+    return output_image;
+}
+
+
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
+
 
     //
     //         Extract surface transform and filter points in the region above it
     //
 
     // filter range of view
-    filterRange(1.5, cloud, *cloud);
+    filterRange(1.5, cloud, *cloud_filtered);
 
     // segment the surface and get coefficients
     pcl::ModelCoefficients::Ptr surface_coefs (new pcl::ModelCoefficients ());
     pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
-    if (!segmentSurface(cloud, inliers, surface_coefs)) return;
+    if (!segmentSurface(cloud_filtered, inliers, surface_coefs)) return;
 
     // normalize coefficients and flip orientation if surface normal points away from camera
     normalizeSurfaceCoefficients(surface_coefs);
-    std::cerr << "Plane coefficients: " << *surface_coefs<< std::endl;
+    //std::cerr << "Plane coefficients: " << *surface_coefs<< std::endl;
 
     // retrieve pose of surface
     geometry_msgs::Pose surface_pose = getSurfacePoseFromCoefficients(surface_coefs);
+
 
     // publish surface pose as surface_frame to /tf
     publishSurfaceTransform(surface_pose, cloud->header.frame_id, surface_frame);
@@ -255,7 +341,8 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     // filter point cloud to region above surface
     std::map<int,int> index_map;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    filterAboveSurface(surface_coefs, cloud, *surfaceCloud, index_map);
+    filterAboveSurface(surface_coefs, cloud_filtered, *surfaceCloud, index_map);
+
 
     // remove statistical outliers
     removeStatisticalOutliers(surfaceCloud, *surfaceCloud);
@@ -280,83 +367,103 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr bottle_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
 
+    orbbec_astra_ip::SegmentedBottleArray bottles;
+    bottles.header.frame_id = surface_frame;
+    bottles.header.stamp = ros::Time::now();
+
     while(bottle_count < max_count && segmentCylinder(surfaceCloud, cloud_normals, cyl_inliers, cyl_coefs)) {
         std::cerr << "Cylinder coefficients: " << *cyl_coefs<< std::endl;
+	orbbec_astra_ip::SegmentedBottle bottle_msg;
 
+	// basic bottle parameters
         double bottle_radius = cyl_coefs->values[6];
         double bottle_height = 0.3;
         std::string bottle_frame_id = bottle_frame + std::to_string(bottle_count);
 
+	// retrieve bottle pose in surface frame
         tf::Transform bottle_tf(tf::Quaternion::getIdentity(), tf::Vector3(cyl_coefs->values[0], cyl_coefs->values[1], cyl_coefs->values[2]));
         tf::Transform new_tf = surface_tf.inverse() * bottle_tf;
-        new_tf.setRotation(tf::Quaternion::getIdentity());
+        new_tf.setRotation(tf::Quaternion::getIdentity()); // upright rotation
+
+	// create pose stamped in surface frame
         geometry_msgs::PoseStamped pose;
         pose.header.frame_id = surfaceCloud->header.frame_id;
         tf::poseTFToMsg(new_tf, pose.pose);
         pose.pose.position.z = 0.5*bottle_height;
+
+	//  interpolate new pose with previous one
         tf::poseMsgToTF(pose.pose, new_tf);
-
-
-        //try{
-
-        //    sensor_msgs::Image bottle_image;
-        //    pcl::toROSMsg(*bottle_cloud, bottle_image);
-        //    bottle_image.height = cloud->height;
-        //    bottle_image.width = cloud->width;
-        //    /*
-        //       if(image_pubs.find(bottle_count) != image_pubs.end()) {
-        //       image_pubs[bottle_count] = nh.advertise<sensor_msgs::Image>(bottle_frame_id + "/image", 1);
-        //       }
-        //       image_pubs[bottle_count].publish(bottle_image);
-        //       */
-        //    image_pub.publish(bottle_image);
-        //}
-        //catch (std::runtime_error)
-        //{
-        //}
-
-
-        pcl::ModelOutlierRemoval<pcl::PointXYZRGB> cyl_filter;
-        cyl_filter.setModelCoefficients (*cyl_coefs);
-        cyl_filter.setModelType (pcl::SACMODEL_CYLINDER);
-        cyl_filter.setThreshold(0.05);
-        cyl_filter.setNegative(true);
-        cyl_filter.setInputNormals(cloud_normals);
-        cyl_filter.setInputCloud (surfaceCloud);
-        cyl_filter.filter (*surfaceCloud);
-
-
-
         if(bottle_transforms.find(bottle_count) != bottle_transforms.end()) {
             interpolateTransforms(bottle_transforms[bottle_count], new_tf, 0.1, new_tf);
         }
         bottle_transforms[bottle_count] = new_tf;
 
+	// set bottle pose of message
+	tf::poseTFToMsg(new_tf, pose.pose);
+	bottle_msg.pose = pose.pose;
+
         static tf::TransformBroadcaster tf_broadcaster;
         tf_broadcaster.sendTransform(tf::StampedTransform(new_tf, ros::Time::now(), surface_frame, bottle_frame_id));
 
-        visualization_msgs::Marker cyl;
-        cyl.header.frame_id = bottle_frame_id;
-        cyl.header.stamp = ros::Time();
-        cyl.ns = "/bottles";
-        cyl.id = bottle_count;
-        cyl.type = visualization_msgs::Marker::CYLINDER;
-        cyl.action = visualization_msgs::Marker::ADD;
-        cyl.scale.x = 2 * bottle_radius;
-        cyl.scale.y = 2 * bottle_radius;
-        cyl.scale.z = 0.3;
-        cyl.color.a = 0.2;
-        cyl.color.g = 1.0;
-        cyl.pose.orientation.w = 1.0;
-        cyl_marker_pub.publish (cyl);
+	geometry_msgs::Pose cam_to_bottle;
+	tf::poseTFToMsg(surface_tf * new_tf, cam_to_bottle);
 
+        try{
+            std::vector<float> c = cyl_coefs->values;
+	    c[2] = pose.pose.position.z;
+            sensor_msgs::Image bottle_image;
+
+            bottle_image.width=100;
+            bottle_image.height =200;
+            BoundingBox bb;
+            bb.x = cam_to_bottle.position.x;
+            bb.y = cam_to_bottle.position.y;
+            bb.z = cam_to_bottle.position.z;
+            bb.width = 0.15;
+            bb.height = 0.3;
+            bb.depth = 0.3;
+            pcl::toROSMsg(*cloud, bottle_image);
+            bottle_msg.image = cutoutImage(&bottle_image, bb, cloud);
+        }
+        catch (std::runtime_error)
+        {
+        }
+
+	bottles.bottles.push_back(bottle_msg);
+
+        pcl::ModelOutlierRemoval<pcl::PointXYZRGB> cyl_filter;
+        cyl_filter.setModelCoefficients (*cyl_coefs);
+        cyl_filter.setModelType (pcl::SACMODEL_CYLINDER);
+        cyl_filter.setThreshold(0.05);
+	cyl_filter.setNegative(true);
+        cyl_filter.setInputNormals(cloud_normals);
+	cyl_filter.setInputCloud (surfaceCloud);
+	cyl_filter.filter (*surfaceCloud);
+
+        //visualization_msgs::Marker cyl;
+        //cyl.header.frame_id = bottle_frame_id;
+        //cyl.header.stamp = ros::Time();
+        //cyl.ns = "/bottles";
+        //cyl.id = bottle_count;
+        //cyl.type = visualization_msgs::Marker::CYLINDER;
+        //cyl.action = visualization_msgs::Marker::ADD;
+        //cyl.scale.x = 2 * bottle_radius;
+        //cyl.scale.y = 2 * bottle_radius;
+        //cyl.scale.z = 0.3;
+        //cyl.color.a = 0.2;
+        //cyl.color.g = 1.0;
+        //cyl.pose.orientation.w = 1.0;
+        //cyl_marker_pub.publish (cyl);
+
+        bottle_count += 1;
         if(surfaceCloud->size()== 0) {
             break;
         }
 
-        bottle_count += 1;
         estimateNormals(surfaceCloud, *cloud_normals);
     }
+    bottles.count = bottle_count;
+    bottles_pub.publish(bottles);
 
     pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
     cyl_pub.publish (outcloud);
@@ -370,16 +477,15 @@ int main (int argc, char** argv)
     ros::init (argc, argv, "pcl_bottle_recognition");
     ros::NodeHandle nh;
 
-
     // Create a ROS subscriber for the input point cloud
     ros::Subscriber sub = nh.subscribe ("/camera/depth_registered/points", 1, callback);
-
 
     // Create a ROS publisher for the output point cloud
     surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
     cyl_pub = nh.advertise<sensor_msgs::PointCloud2> ("/cylinder_filtered", 1);
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
     image_pub = nh.advertise<sensor_msgs::Image>("/bottle0/image", 1);
+    bottles_pub = nh.advertise<orbbec_astra_ip::SegmentedBottleArray>("/segmented_bottles", 1);
 
 
     // Spin
