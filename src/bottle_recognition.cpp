@@ -372,7 +372,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     bottles.header.stamp = ros::Time::now();
 
     while(bottle_count < max_count && segmentCylinder(surfaceCloud, cloud_normals, cyl_inliers, cyl_coefs)) {
-        std::cerr << "Cylinder coefficients: " << *cyl_coefs<< std::endl;
+        //std::cerr << "Cylinder coefficients: " << *cyl_coefs<< std::endl;
 	orbbec_astra_ip::SegmentedBottle bottle_msg;
 
 	// basic bottle parameters
