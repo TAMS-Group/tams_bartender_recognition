@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+	<include file="$(find astra_launch)/launch/astra.launch"/>
+
+	<node pkg="orbbec_astra_ip" type="pcl_bottle_recognition" name="bottle_recognition"/>
+
+	<!--	<node pkg="orbbec_astra_ip" type="sample_collector.py" name="sample_collector"/>-->
+
+	<node pkg="image_view" type="image_view" name="sample_view" respawn="false">
+		<remap from="image" to="/label_samples"/>
+	</node>
+
+</launch>
