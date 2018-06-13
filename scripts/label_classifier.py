@@ -10,12 +10,44 @@ from keras.layers import MaxPooling2D
 from keras.layers import Flatten
 from keras.layers import Dense
 from keras.layers import Dropout
+from keras import applications
 
 
 import cv2
+import matplotlib.pyplot as plt
 
 import numpy as np
 import glob
+
+def prepare_vgg(output_dim):
+    vgg_model = applications.VGG16(weights='imagenet', include_top=False, input_shape=(96, 96, 3))
+
+    # Creating dictionary that maps layer names to the layers
+    layer_dict = dict([(layer.name, layer) for layer in vgg_model.layers])
+
+    # Getting output tensor of the last VGG layer that we want to include
+    x = layer_dict['block2_pool'].output
+
+    # Stacking a new simple convolutional network on top of it    
+    x = Conv2D(filters=64, kernel_size=(3, 3), activation='relu')(x)
+    x = MaxPooling2D(pool_size=(2, 2))(x)
+    x = Flatten()(x)
+    x = Dense(256, activation='relu')(x)
+    x = Dropout(0.5)(x)
+    x = Dense(output_dim, activation='softmax')(x)
+
+    # Creating new model. Please note that this is NOT a Sequential() model.
+    from keras.models import Model
+    custom_model = Model(input=vgg_model.input, output=x)
+
+    # Make sure that the pre-trained bottom layers are not trainable
+    for layer in custom_model.layers[:7]:
+            layer.trainable = False
+
+    # Do not forget to compile it
+    custom_model.compile(loss='categorical_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+    return custom_model
+
 
 def prepare_classifier(output_dim):
     classifier = Sequential()
@@ -60,12 +92,12 @@ def prepare_classifier2(output_dim):
 
     model.add(Dense(units = output_dim, activation = 'softmax'))
     # Compiling the CNN
-    model.compile(optimizer = 'adam', loss = 'categorical_crossentropy', metrics = ['accuracy'])
+    model.compile(optimizer = 'rmsprob', loss = 'categorical_crossentropy', metrics = ['accuracy'])
     return model
 
 
 def get_model(labels):
-    classifier = prepare_classifier2(len(labels))
+    classifier = prepare_vgg(len(labels))
     # Initialising the CN    # Part 2 - Fitting the CNN to the images
     from keras.preprocessing.image import ImageDataGenerator
     train_datagen = ImageDataGenerator(rescale = 1./255,
@@ -119,6 +151,7 @@ class label_classifier:
         img = img_to_array(img)
         img = np.expand_dims(img, axis = 0)
         prediction = self.classifier.predict(img)[0]
+        print prediction
         return self.labels[np.argmax(prediction)]
 
 def init_label_classifier():
@@ -133,8 +166,8 @@ def init_label_classifier():
     return classifier
 
 if __name__=="__main__":
-    data = get_labels_and_images('labels')
-    print data
+    #data = get_labels_and_images('labels_test')
+    #print data
 
     # load model from file or train new
     classifier = init_label_classifier()

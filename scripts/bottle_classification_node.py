@@ -51,8 +51,8 @@ def consume_bottle(bottle):
 # classify label for bottle message
 def classify_bottle(bottle):
     try:
-        image = CvBridge().imgmsg_to_cv2(bottle.image, "bgr8")
-        return classifier.predict_image(image)
+        img = CvBridge().imgmsg_to_cv2(bottle.image, "rgb8")
+        return classifier.predict_image(img)
     except CvBridgeError as e:
         print e
     return None
