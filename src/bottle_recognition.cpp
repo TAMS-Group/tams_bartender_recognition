@@ -387,7 +387,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
 	// create pose stamped in surface frame
         geometry_msgs::PoseStamped pose;
-        pose.header.frame_id = surfaceCloud->header.frame_id;
+        pose.header.frame_id = surface_frame;
         tf::poseTFToMsg(new_tf, pose.pose);
         pose.pose.position.z = 0.5*bottle_height;
 
@@ -400,10 +400,10 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
 	// set bottle pose of message
 	tf::poseTFToMsg(new_tf, pose.pose);
-	bottle_msg.pose = pose.pose;
+	bottle_msg.pose = pose;
 
         static tf::TransformBroadcaster tf_broadcaster;
-        tf_broadcaster.sendTransform(tf::StampedTransform(new_tf, ros::Time::now(), surface_frame, bottle_frame_id));
+        //tf_broadcaster.sendTransform(tf::StampedTransform(new_tf, ros::Time::now(), surface_frame, bottle_frame_id));
 
 	geometry_msgs::Pose cam_to_bottle;
 	tf::poseTFToMsg(surface_tf * new_tf, cam_to_bottle);
