@@ -52,7 +52,7 @@ struct BoundingBox {
 };
 
 
-ros::Publisher surface_pub, cyl_pub, cyl_marker_pub, image_pub, bottles_pub;
+ros::Publisher surface_pub, cyl_marker_pub, bottles_pub;
 std::string surface_frame = "/surface";
 std::string bottle_frame = "/bottle";
 bool has_surface_transform = false;
@@ -140,6 +140,7 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
 
 
     pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg;
+
     seg.setOptimizeCoefficients (true);
     seg.setModelType (pcl::SACMODEL_CYLINDER);
     seg.setMethodType (pcl::SAC_RANSAC);
@@ -334,7 +335,6 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     // retrieve pose of surface
     geometry_msgs::Pose surface_pose = getSurfacePoseFromCoefficients(surface_coefs);
 
-
     // publish surface pose as surface_frame to /tf
     publishSurfaceTransform(surface_pose, cloud->header.frame_id, surface_frame);
 
@@ -343,15 +343,20 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
     filterAboveSurface(surface_coefs, cloud_filtered, *surfaceCloud, index_map);
 
-
     // remove statistical outliers
     removeStatisticalOutliers(surfaceCloud, *surfaceCloud);
 
     // publish segmented surface cloud
     pcl::PCLPointCloud2 outcloud;
+    surfaceCloud->header.frame_id = cloud->header.frame_id;
     pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
     surface_pub.publish (outcloud);
 
+
+
+    //
+    // Segment Cylinders and extract bottle candidates
+    //
 
     // Estimate point normals
     pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
@@ -362,15 +367,15 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
     std::vector<geometry_msgs::Pose> cylinder_poses;
 
-    int max_count = 5;
-    int bottle_count = 0;
-
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr bottle_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-
+    // initialize SegmentedBottleArray message
     orbbec_astra_ip::SegmentedBottleArray bottles;
     bottles.header.frame_id = surface_frame;
     bottles.header.stamp = ros::Time::now();
 
+    int max_count = 5;
+    int bottle_count = 0;
+
+    // iteratively extract bottles from pointcloud
     while(bottle_count < max_count && segmentCylinder(surfaceCloud, cloud_normals, cyl_inliers, cyl_coefs)) {
         //std::cerr << "Cylinder coefficients: " << *cyl_coefs<< std::endl;
 	orbbec_astra_ip::SegmentedBottle bottle_msg;
@@ -380,68 +385,73 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
         double bottle_height = 0.3;
         std::string bottle_frame_id = bottle_frame + std::to_string(bottle_count);
 
+	// compute cylinder orientation (might be tested for correct upright rotation)
+	tf::Vector3 cyl_axis(cyl_coefs->values[3], cyl_coefs->values[4], cyl_coefs->values[5]);
+	const tf::Vector3 z_axis(0.0, 0.0, 1.0);
+	tf::Vector3 norm=cyl_axis.cross(z_axis).normalized();
+	float up_angle = -1.0 * std::acos(cyl_axis.dot(z_axis));
+	tf::Quaternion q(norm, up_angle);
+	q.normalize();
+
 	// retrieve bottle pose in surface frame
         tf::Transform bottle_tf(tf::Quaternion::getIdentity(), tf::Vector3(cyl_coefs->values[0], cyl_coefs->values[1], cyl_coefs->values[2]));
         tf::Transform new_tf = surface_tf.inverse() * bottle_tf;
-        new_tf.setRotation(tf::Quaternion::getIdentity()); // upright rotation
+
+	// fix bottle to upright rotation
+        new_tf.setRotation(tf::Quaternion::getIdentity());
 
 	// create pose stamped in surface frame
         geometry_msgs::PoseStamped pose;
         pose.header.frame_id = surface_frame;
+
+	// fix bottle z position and add to SegmentedBottle Message
         tf::poseTFToMsg(new_tf, pose.pose);
-        pose.pose.position.z = 0.5*bottle_height;
-
-	//  interpolate new pose with previous one
-        tf::poseMsgToTF(pose.pose, new_tf);
-        if(bottle_transforms.find(bottle_count) != bottle_transforms.end()) {
-            interpolateTransforms(bottle_transforms[bottle_count], new_tf, 0.1, new_tf);
-        }
-        bottle_transforms[bottle_count] = new_tf;
-
-	// set bottle pose of message
-	tf::poseTFToMsg(new_tf, pose.pose);
+        pose.pose.position.z = 0.5*bottle_height; 
 	bottle_msg.pose = pose;
+        tf::poseMsgToTF(pose.pose, new_tf);
 
-        static tf::TransformBroadcaster tf_broadcaster;
+	//  interpolate new pose with previous one - this now happens after classification
+        //if(bottle_transforms.find(bottle_count) != bottle_transforms.end()) {
+        //    interpolateTransforms(bottle_transforms[bottle_count], new_tf, 0.1, new_tf);
+        //}
+        //bottle_transforms[bottle_count] = new_tf;
+
+        //static tf::TransformBroadcaster tf_broadcaster;
         //tf_broadcaster.sendTransform(tf::StampedTransform(new_tf, ros::Time::now(), surface_frame, bottle_frame_id));
 
-	geometry_msgs::Pose cam_to_bottle;
-	tf::poseTFToMsg(surface_tf * new_tf, cam_to_bottle);
 
+	// Try to extract a 2d image of the bottle
         try{
-            std::vector<float> c = cyl_coefs->values;
-	    c[2] = pose.pose.position.z;
-            sensor_msgs::Image bottle_image;
+	    geometry_msgs::Pose cam_to_bottle;
+	    tf::poseTFToMsg(surface_tf * new_tf, cam_to_bottle);
 
+	    // get full 2d image of cloud
+            sensor_msgs::Image bottle_image;
             bottle_image.width=100;
-            bottle_image.height =200;
-            BoundingBox bb;
-            bb.x = cam_to_bottle.position.x;
-            bb.y = cam_to_bottle.position.y;
+            bottle_image.height=200;
+            pcl::toROSMsg(*cloud, bottle_image);
+
+	    // define bounding box size and position
+	    BoundingBox bb;
+	    bb.x = cam_to_bottle.position.x;
+	    bb.y = cam_to_bottle.position.y;
             bb.z = cam_to_bottle.position.z;
             bb.width = 0.15;
             bb.height = 0.3;
             bb.depth = 0.3;
-            pcl::toROSMsg(*cloud, bottle_image);
+
+	    // extract bottle image from full image
             bottle_msg.image = cutoutImage(&bottle_image, bb, cloud);
         }
         catch (std::runtime_error)
         {
+		ROS_ERROR("Unable to extract bottle image from cloud!");
+		return;
         }
-
-	bottles.bottles.push_back(bottle_msg);
-
-        pcl::ModelOutlierRemoval<pcl::PointXYZRGB> cyl_filter;
-        cyl_filter.setModelCoefficients (*cyl_coefs);
-        cyl_filter.setModelType (pcl::SACMODEL_CYLINDER);
-        cyl_filter.setThreshold(0.05);
-	cyl_filter.setNegative(true);
-        cyl_filter.setInputNormals(cloud_normals);
-	cyl_filter.setInputCloud (surfaceCloud);
-	cyl_filter.filter (*surfaceCloud);
-
+	
+	// Create and publish bottle marker
         //visualization_msgs::Marker cyl;
-        //cyl.header.frame_id = bottle_frame_id;
+        //cyl.header.frame_id = surface_frame;
         //cyl.header.stamp = ros::Time();
         //cyl.ns = "/bottles";
         //cyl.id = bottle_count;
@@ -452,21 +462,40 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
         //cyl.scale.z = 0.3;
         //cyl.color.a = 0.2;
         //cyl.color.g = 1.0;
-        //cyl.pose.orientation.w = 1.0;
+	//cyl.pose = pose.pose;
         //cyl_marker_pub.publish (cyl);
+	
+	
+	// add SegmentedBottle message to SegmentedBottleArray
+	bottles.bottles.push_back(bottle_msg);
 
+	// Remove bottle from pointcloud
+        pcl::ModelOutlierRemoval<pcl::PointXYZRGB> cyl_filter;
+        cyl_filter.setModelCoefficients (*cyl_coefs);
+        cyl_filter.setModelType (pcl::SACMODEL_CYLINDER);
+        cyl_filter.setThreshold(0.05);
+	cyl_filter.setNegative(true);
+        cyl_filter.setInputNormals(cloud_normals);
+	cyl_filter.setInputCloud (surfaceCloud);
+	cyl_filter.filter (*surfaceCloud);
+	
+
+	// increase bottle count
         bottle_count += 1;
+
+	// leave if cloud is empty
         if(surfaceCloud->size()== 0) {
             break;
         }
 
+	// else we compute normals again and look for other bottles
         estimateNormals(surfaceCloud, *cloud_normals);
     }
+
+
+    // publish SegmentedBottlesArray
     bottles.count = bottle_count;
     bottles_pub.publish(bottles);
-
-    pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
-    cyl_pub.publish (outcloud);
 }
 
 
@@ -482,9 +511,7 @@ int main (int argc, char** argv)
 
     // Create a ROS publisher for the output point cloud
     surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
-    cyl_pub = nh.advertise<sensor_msgs::PointCloud2> ("/cylinder_filtered", 1);
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
-    image_pub = nh.advertise<sensor_msgs::Image>("/bottle0/image", 1);
     bottles_pub = nh.advertise<orbbec_astra_ip::SegmentedBottleArray>("/segmented_bottles", 1);
 
 
