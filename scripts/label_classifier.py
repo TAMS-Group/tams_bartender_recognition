@@ -151,8 +151,11 @@ class label_classifier:
         img = img_to_array(img)
         img = np.expand_dims(img, axis = 0)
         prediction = self.classifier.predict(img)[0]
-        print prediction
-        return self.labels[np.argmax(prediction)]
+        return np.argmax(prediction)
+
+    def predict_label(self, img):
+        i = self.predict_image(img)
+        return i, self.labels[i]
 
 def init_label_classifier():
     model_file = "labels_model.h5"
