@@ -103,7 +103,7 @@ void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl
     int target_id = 0;;
     for(pcl::PointXYZRGB point : *incloud) {
         float point_distance = (point.x * a + point.y * b + point.z * c - d / sqrt_abc);
-        if(0.03 < point_distance && point_distance < 0.25) {
+        if(0.02 < point_distance && point_distance < 0.25) {
             outcloud.push_back(point);
             index_map[target_id] = source_id;
             target_id += 1;
@@ -144,10 +144,10 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
     seg.setOptimizeCoefficients (true);
     seg.setModelType (pcl::SACMODEL_CYLINDER);
     seg.setMethodType (pcl::SAC_RANSAC);
-    seg.setNormalDistanceWeight (0.1);
+    seg.setNormalDistanceWeight (0.05);
     seg.setMaxIterations (10000);
     seg.setDistanceThreshold (0.08);
-    seg.setRadiusLimits (0.035, 0.045);
+    seg.setRadiusLimits (0.035, 0.05);
     seg.setInputCloud (cloud);
     seg.setInputNormals (normals);
 
@@ -406,9 +406,11 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
 	// fix bottle z position and add to SegmentedBottle Message
         tf::poseTFToMsg(new_tf, pose.pose);
-        pose.pose.position.z = 0.5*bottle_height; 
-	bottle_msg.pose = pose;
+        pose.pose.position.z = 0.5*bottle_height;  // center bounding box pose
         tf::poseMsgToTF(pose.pose, new_tf);
+
+        pose.pose.position.z = 0.0;  // fix object position z to 0, we fix the height later
+	bottle_msg.pose = pose;
 
 	//  interpolate new pose with previous one - this now happens after classification
         //if(bottle_transforms.find(bottle_count) != bottle_transforms.end()) {
