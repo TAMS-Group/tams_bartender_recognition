@@ -28,6 +28,7 @@
 #include <pcl/filters/crop_box.h>
 #include <pcl/filters/statistical_outlier_removal.h>
 #include <pcl/filters/passthrough.h>
+#include <pcl/filters/voxel_grid.h>
 
 #include <std_msgs/Float32MultiArray.h>
 #include <tf/tf.h>
@@ -74,7 +75,7 @@ void estimateNormals(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Po
     pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;
     ne.setSearchMethod (tree);
     ne.setInputCloud (cloud);
-    ne.setKSearch (50);
+    ne.setKSearch (30);
     ne.compute (normals);
 }
 
@@ -91,7 +92,7 @@ void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
     sphere_filter.filter (outcloud);
 }
 
-void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud, std::map<int, int> index_map) {
+void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
     float a = plane_coefs->values[0];
     float b = plane_coefs->values[1];
     float c = plane_coefs->values[2];
@@ -99,16 +100,11 @@ void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl
     float sqrt_abc = std::sqrt(std::pow(a,2) + std::pow(b,2) + std::pow(c,2));
     float p = d / sqrt_abc;
 
-    int source_id = 0;
-    int target_id = 0;;
     for(pcl::PointXYZRGB point : *incloud) {
         float point_distance = (point.x * a + point.y * b + point.z * c - d / sqrt_abc);
-        if(0.02 < point_distance && point_distance < 0.25) {
+        if(0.015 < point_distance && point_distance < 0.3) {
             outcloud.push_back(point);
-            index_map[target_id] = source_id;
-            target_id += 1;
         }
-        source_id += 1;
     }
 }
 
@@ -127,7 +123,7 @@ bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Poi
     seg.setModelType (pcl::SACMODEL_PLANE);
     seg.setMethodType (pcl::SAC_RANSAC);
     seg.setMaxIterations (1000);
-    seg.setDistanceThreshold (0.01);
+    seg.setDistanceThreshold (0.03);
     seg.setInputCloud (cloud);
 
     seg.segment(*inliers, *plane_coefs);
@@ -144,10 +140,10 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
     seg.setOptimizeCoefficients (true);
     seg.setModelType (pcl::SACMODEL_CYLINDER);
     seg.setMethodType (pcl::SAC_RANSAC);
-    seg.setNormalDistanceWeight (0.05);
-    seg.setMaxIterations (10000);
-    seg.setDistanceThreshold (0.08);
-    seg.setRadiusLimits (0.035, 0.05);
+    seg.setNormalDistanceWeight (0.25);
+    seg.setMaxIterations (2000);
+    seg.setDistanceThreshold (0.15);
+    seg.setRadiusLimits (0.035, 0.045);
     seg.setInputCloud (cloud);
     seg.setInputNormals (normals);
 
@@ -218,8 +214,6 @@ geometry_msgs::Pose getSurfacePoseFromCoefficients(pcl::ModelCoefficients::Ptr p
     float up_angle = -1.0 * std::acos(normal.dot(up));
     tf::Quaternion q(norm, up_angle);
     q.normalize();
-    norm = q.getAxis();
-    up_angle = q.getAngle();
     tf::quaternionTFToMsg(q, pose.orientation);
     return pose;
 }
@@ -321,7 +315,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     //
 
     // filter range of view
-    filterRange(1.5, cloud, *cloud_filtered);
+    filterRange(1.3, cloud, *cloud_filtered);
 
     // segment the surface and get coefficients
     pcl::ModelCoefficients::Ptr surface_coefs (new pcl::ModelCoefficients ());
@@ -339,9 +333,8 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     publishSurfaceTransform(surface_pose, cloud->header.frame_id, surface_frame);
 
     // filter point cloud to region above surface
-    std::map<int,int> index_map;
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    filterAboveSurface(surface_coefs, cloud_filtered, *surfaceCloud, index_map);
+    filterAboveSurface(surface_coefs, cloud_filtered, *surfaceCloud);
 
     // remove statistical outliers
     removeStatisticalOutliers(surfaceCloud, *surfaceCloud);
@@ -351,8 +344,6 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     surfaceCloud->header.frame_id = cloud->header.frame_id;
     pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
     surface_pub.publish (outcloud);
-
-
 
     //
     // Segment Cylinders and extract bottle candidates
@@ -378,41 +369,41 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     // iteratively extract bottles from pointcloud
     while(bottle_count < max_count && segmentCylinder(surfaceCloud, cloud_normals, cyl_inliers, cyl_coefs)) {
         //std::cerr << "Cylinder coefficients: " << *cyl_coefs<< std::endl;
-	orbbec_astra_ip::SegmentedBottle bottle_msg;
+        orbbec_astra_ip::SegmentedBottle bottle_msg;
 
-	// basic bottle parameters
+        // basic bottle parameters
         double bottle_radius = cyl_coefs->values[6];
         double bottle_height = 0.3;
         std::string bottle_frame_id = bottle_frame + std::to_string(bottle_count);
 
-	// compute cylinder orientation (might be tested for correct upright rotation)
-	tf::Vector3 cyl_axis(cyl_coefs->values[3], cyl_coefs->values[4], cyl_coefs->values[5]);
-	const tf::Vector3 z_axis(0.0, 0.0, 1.0);
-	tf::Vector3 norm=cyl_axis.cross(z_axis).normalized();
-	float up_angle = -1.0 * std::acos(cyl_axis.dot(z_axis));
-	tf::Quaternion q(norm, up_angle);
-	q.normalize();
+        // compute cylinder orientation (might be tested for correct upright rotation)
+        tf::Vector3 cyl_axis(cyl_coefs->values[3], cyl_coefs->values[4], cyl_coefs->values[5]);
+        const tf::Vector3 z_axis(0.0, 0.0, 1.0);
+        tf::Vector3 norm=cyl_axis.cross(z_axis).normalized();
+        float up_angle = -1.0 * std::acos(cyl_axis.dot(z_axis));
+        tf::Quaternion q(norm, up_angle);
+        q.normalize();
 
-	// retrieve bottle pose in surface frame
+        // retrieve bottle pose in surface frame
         tf::Transform bottle_tf(tf::Quaternion::getIdentity(), tf::Vector3(cyl_coefs->values[0], cyl_coefs->values[1], cyl_coefs->values[2]));
         tf::Transform new_tf = surface_tf.inverse() * bottle_tf;
 
-	// fix bottle to upright rotation
+        // fix bottle to upright rotation
         new_tf.setRotation(tf::Quaternion::getIdentity());
 
-	// create pose stamped in surface frame
+        // create pose stamped in surface frame
         geometry_msgs::PoseStamped pose;
         pose.header.frame_id = surface_frame;
 
-	// fix bottle z position and add to SegmentedBottle Message
+        // fix bottle z position and add to SegmentedBottle Message
         tf::poseTFToMsg(new_tf, pose.pose);
         pose.pose.position.z = 0.5*bottle_height;  // center bounding box pose
         tf::poseMsgToTF(pose.pose, new_tf);
 
         pose.pose.position.z = 0.0;  // fix object position z to 0, we fix the height later
-	bottle_msg.pose = pose;
+        bottle_msg.pose = pose;
 
-	//  interpolate new pose with previous one - this now happens after classification
+        //  interpolate new pose with previous one - this now happens after classification
         //if(bottle_transforms.find(bottle_count) != bottle_transforms.end()) {
         //    interpolateTransforms(bottle_transforms[bottle_count], new_tf, 0.1, new_tf);
         //}
@@ -422,36 +413,36 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
         //tf_broadcaster.sendTransform(tf::StampedTransform(new_tf, ros::Time::now(), surface_frame, bottle_frame_id));
 
 
-	// Try to extract a 2d image of the bottle
+        // Try to extract a 2d image of the bottle
         try{
-	    geometry_msgs::Pose cam_to_bottle;
-	    tf::poseTFToMsg(surface_tf * new_tf, cam_to_bottle);
+            geometry_msgs::Pose cam_to_bottle;
+            tf::poseTFToMsg(surface_tf * new_tf, cam_to_bottle);
 
-	    // get full 2d image of cloud
+            // get full 2d image of cloud
             sensor_msgs::Image bottle_image;
             bottle_image.width=100;
             bottle_image.height=200;
             pcl::toROSMsg(*cloud, bottle_image);
 
-	    // define bounding box size and position
-	    BoundingBox bb;
-	    bb.x = cam_to_bottle.position.x;
-	    bb.y = cam_to_bottle.position.y;
+            // define bounding box size and position
+            BoundingBox bb;
+            bb.x = cam_to_bottle.position.x;
+            bb.y = cam_to_bottle.position.y;
             bb.z = cam_to_bottle.position.z;
             bb.width = 0.15;
             bb.height = 0.3;
             bb.depth = 0.3;
 
-	    // extract bottle image from full image
+            // extract bottle image from full image
             bottle_msg.image = cutoutImage(&bottle_image, bb, cloud);
         }
         catch (std::runtime_error)
         {
-		ROS_ERROR("Unable to extract bottle image from cloud!");
-		return;
+            ROS_ERROR("Unable to extract bottle image from cloud!");
+            return;
         }
-	
-	// Create and publish bottle marker
+
+        // Create and publish bottle marker
         //visualization_msgs::Marker cyl;
         //cyl.header.frame_id = surface_frame;
         //cyl.header.stamp = ros::Time();
@@ -464,33 +455,33 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
         //cyl.scale.z = 0.3;
         //cyl.color.a = 0.2;
         //cyl.color.g = 1.0;
-	//cyl.pose = pose.pose;
+        //cyl.pose = pose.pose;
         //cyl_marker_pub.publish (cyl);
-	
-	
-	// add SegmentedBottle message to SegmentedBottleArray
-	bottles.bottles.push_back(bottle_msg);
 
-	// Remove bottle from pointcloud
+
+        // add SegmentedBottle message to SegmentedBottleArray
+        bottles.bottles.push_back(bottle_msg);
+
+        // Remove bottle from pointcloud
         pcl::ModelOutlierRemoval<pcl::PointXYZRGB> cyl_filter;
         cyl_filter.setModelCoefficients (*cyl_coefs);
         cyl_filter.setModelType (pcl::SACMODEL_CYLINDER);
         cyl_filter.setThreshold(0.05);
-	cyl_filter.setNegative(true);
+        cyl_filter.setNegative(true);
         cyl_filter.setInputNormals(cloud_normals);
-	cyl_filter.setInputCloud (surfaceCloud);
-	cyl_filter.filter (*surfaceCloud);
-	
+        cyl_filter.setInputCloud (surfaceCloud);
+        cyl_filter.filter (*surfaceCloud);
 
-	// increase bottle count
+
+        // increase bottle count
         bottle_count += 1;
 
-	// leave if cloud is empty
+        // leave if cloud is empty
         if(surfaceCloud->size()== 0) {
             break;
         }
 
-	// else we compute normals again and look for other bottles
+        // else we compute normals again and look for other bottles
         estimateNormals(surfaceCloud, *cloud_normals);
     }
 
