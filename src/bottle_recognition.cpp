@@ -14,6 +14,7 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
+#include <pcl/segmentation/extract_clusters.h>
 #include <pcl/ModelCoefficients.h>
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
@@ -23,6 +24,7 @@
 
 #include <iostream>
 #include <pcl/io/pcd_io.h>
+#include <pcl/filters/filter.h>
 #include <pcl/filters/extract_indices.h>
 #include <pcl/filters/model_outlier_removal.h>
 #include <pcl/filters/crop_box.h>
@@ -53,7 +55,7 @@ struct BoundingBox {
 };
 
 
-ros::Publisher surface_pub, cyl_marker_pub, bottles_pub;
+ros::Publisher surface_pub, cyl_marker_pub, bottles_pub, clusters_pub;
 std::string surface_frame = "/surface";
 std::string bottle_frame = "/bottle";
 bool has_surface_transform = false;
@@ -302,6 +304,72 @@ sensor_msgs::Image cutoutImage(const sensor_msgs::Image *image,
     return output_image;
 }
 
+void setColor(pcl::PointXYZRGB &point, int color) {
+	//std::map<std::string, std::vector<int>> const colors {
+	//	{ "red", {255, 0, 0} },
+	//	{ "green", {0, 255, 0} },
+	//	{ "blue", {0, 0, 255} },
+	//	{ "yellow", {255, 255, 0} },
+	//	{ "magenta", {255, 0, 255} },
+	//	{ "cyan", {0, 255, 255} },
+	//	{ "black", {0, 0, 0} },
+	//	{ "orange", {255, 91, 0} },
+	//	{ "purple", {111, 49, 152}  }
+	//};
+
+	const std::vector<std::vector<int>> colors  = {
+		{ {255, 0, 0} },
+		{ {0, 255, 0} },
+		{ {0, 0, 255} },
+		{ {255, 255, 0} },
+		{ {255, 0, 255} },
+		{ {0, 255, 255} },
+		{ {0, 0, 0} },
+		{ {255, 91, 0} },
+		{ {111, 49, 152}  }
+	};
+	std::vector<int> c = colors[color % colors.size()];
+	point.r = c[0];
+	point.g = c[1];
+	point.b = c[2];
+}
+
+void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) {
+
+	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
+	std::vector<int> mapping;
+	pcl::removeNaNFromPointCloud(*cloud, *cloud_filtered, mapping);
+
+	//cloud_filtered->is_dense = false;
+	// Creating the KdTree object for the search method of the extraction
+	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>);
+	tree->setInputCloud (cloud_filtered);
+
+	std::vector<pcl::PointIndices> cluster_indices;
+	pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> ec;
+	ec.setClusterTolerance (0.02);
+	ec.setMinClusterSize (1500);
+	ec.setMaxClusterSize (5000);
+	ec.setSearchMethod (tree);
+	ec.setInputCloud (cloud_filtered);
+	ec.extract (cluster_indices);
+	std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
+	std::cerr << "Cluster sizes: ";
+	std::vector<int> sizes;
+	for(int i = 0; i < cluster_indices.size(); i++) {
+		const pcl::PointIndices indices = cluster_indices[i];
+		std::cerr << indices.indices.size() << ' ';
+		for (int j : indices.indices){
+			setColor((*cloud_filtered)[j], i);
+		}
+	}
+	std::cerr << std::endl;
+
+	pcl::PCLPointCloud2 outcloud;
+	pcl::toPCLPointCloud2 (*cloud_filtered, outcloud);
+	clusters_pub.publish (outcloud);
+}
+
 
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
@@ -345,6 +413,16 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
     surface_pub.publish (outcloud);
 
+    extractClusters(surfaceCloud);
+
+
+
+
+
+
+
+    /*
+     
     //
     // Segment Cylinders and extract bottle candidates
     //
@@ -352,11 +430,11 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     // Estimate point normals
     pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
     estimateNormals(surfaceCloud, *cloud_normals);
-
     // Create the segmentation object for cylinder segmentation and set all the parameters
     pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
     pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
     std::vector<geometry_msgs::Pose> cylinder_poses;
+
 
     // initialize SegmentedBottleArray message
     orbbec_astra_ip::SegmentedBottleArray bottles;
@@ -489,6 +567,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     // publish SegmentedBottlesArray
     bottles.count = bottle_count;
     bottles_pub.publish(bottles);
+    */
 }
 
 
@@ -504,6 +583,7 @@ int main (int argc, char** argv)
 
     // Create a ROS publisher for the output point cloud
     surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
+    clusters_pub = nh.advertise<sensor_msgs::PointCloud2> ("/extracted_clusters", 1);
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
     bottles_pub = nh.advertise<orbbec_astra_ip::SegmentedBottleArray>("/segmented_bottles", 1);
 
