@@ -5,3 +5,4 @@
 scripts/labels
 scripts/labels_test
 scripts/labels_train
+scripts/*.h5
