@@ -142,9 +142,9 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
     seg.setOptimizeCoefficients (true);
     seg.setModelType (pcl::SACMODEL_CYLINDER);
     seg.setMethodType (pcl::SAC_RANSAC);
-    seg.setNormalDistanceWeight (0.25);
+    seg.setNormalDistanceWeight (0.05);
     seg.setMaxIterations (2000);
-    seg.setDistanceThreshold (0.15);
+    seg.setDistanceThreshold (0.05);
     seg.setRadiusLimits (0.035, 0.045);
     seg.setInputCloud (cloud);
     seg.setInputNormals (normals);
@@ -334,18 +334,17 @@ void setColor(pcl::PointXYZRGB &point, int color) {
 	point.b = c[2];
 }
 
-void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud) {
+void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered, std::vector<pcl::PointIndices> &cluster_indices) {
 
-	pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
-	std::vector<int> mapping;
-	pcl::removeNaNFromPointCloud(*cloud, *cloud_filtered, mapping);
+	//pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
+	//std::vector<int> mapping;
+	//pcl::removeNaNFromPointCloud(*cloud, *cloud_filtered, mapping);
 
 	//cloud_filtered->is_dense = false;
 	// Creating the KdTree object for the search method of the extraction
 	pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>);
 	tree->setInputCloud (cloud_filtered);
 
-	std::vector<pcl::PointIndices> cluster_indices;
 	pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> ec;
 	ec.setClusterTolerance (0.02);
 	ec.setMinClusterSize (1500);
@@ -413,13 +412,90 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
     surface_pub.publish (outcloud);
 
-    extractClusters(surfaceCloud);
 
+    std::vector<int> mapping;
+    pcl::removeNaNFromPointCloud(*surfaceCloud, *surfaceCloud, mapping);
 
+    std::vector<pcl::PointIndices> cluster_indices;
+    extractClusters(surfaceCloud, cluster_indices);
 
+    orbbec_astra_ip::SegmentedBottleArray bottles;
+    bottles.header.frame_id = surface_frame;
+    bottles.header.stamp = ros::Time::now();
 
+    for(const pcl::PointIndices cluster : cluster_indices) {
+	    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+      pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
+      pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
+      pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
+      for (int i : cluster.indices) {
+        cluster_cloud->points.push_back (surfaceCloud->points[i]);
+      }
+      cluster_cloud->width = cluster_cloud->points.size();
+      cluster_cloud->height = 1;
+      cluster_cloud->is_dense = true;
 
+      // segment cluster as cylinder
+      estimateNormals(cluster_cloud, *cloud_normals);
+      if(segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs)) {
 
+        orbbec_astra_ip::SegmentedBottle bottle_msg;
+
+        // basic bottle parameters
+        double x = cyl_coefs->values[0];
+        double y = cyl_coefs->values[1];
+        double z = cyl_coefs->values[2];
+        double bottle_radius = cyl_coefs->values[6];
+
+        // retrieve bottle pose in surface frame
+        tf::Transform cam_to_bottle(tf::Quaternion::getIdentity(), tf::Vector3(x, y, z));
+        tf::Transform surface_to_bottle = surface_tf.inverse() * cam_to_bottle;
+
+        // fix bottle to upright rotation and align z with surface
+        surface_to_bottle.setRotation(tf::Quaternion::getIdentity());
+        tf::Vector3 bottleXYZ = surface_to_bottle.getOrigin();
+        bottleXYZ.setZ(0.0);
+        surface_to_bottle.setOrigin(bottleXYZ);
+
+        // create pose stamped in surface frame
+        bottle_msg.pose.header.frame_id = surface_frame;
+        tf::poseTFToMsg(surface_to_bottle, bottle_msg.pose.pose);
+
+        // Try to extract a 2d image of the bottle
+        try{
+            // get full 2d image of cloud
+            sensor_msgs::Image bottle_image;
+            bottle_image.width=100;
+            bottle_image.height=200;
+            pcl::toROSMsg(*cloud, bottle_image);
+
+            bottleXYZ.setZ(0.15);
+            surface_to_bottle.setOrigin(bottleXYZ);
+            cam_to_bottle = surface_tf * surface_to_bottle;
+
+            // define bounding box size and position
+            BoundingBox bb;
+            bb.x = cam_to_bottle.getOrigin().getX();
+            bb.y = cam_to_bottle.getOrigin().getY();
+            bb.z = cam_to_bottle.getOrigin().getZ();
+            bb.width = 0.15;
+            bb.height = 0.3;
+            bb.depth = 0.3;
+
+            // extract bottle image from full image
+            bottle_msg.image = cutoutImage(&bottle_image, bb, cloud);
+            // add SegmentedBottle message to SegmentedBottleArray
+            bottles.bottles.push_back(bottle_msg);
+            bottles.count++;
+        }
+        catch (std::runtime_error)
+        {
+            ROS_ERROR("Unable to extract bottle image from cloud!");
+        }
+      }
+    }
+
+    bottles_pub.publish(bottles);
 
     /*
      

@@ -159,7 +159,7 @@ class label_classifier:
         return i, self.labels[i]
 
 def init_label_classifier():
-    model_file = "models/model_default.h5"
+    model_file = "models/labels_model_v2.h5"
     if(glob.glob(model_file)):
         classifier = load_model(model_file)
     else:

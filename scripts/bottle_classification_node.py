@@ -31,9 +31,7 @@ glass_mesh_uri = "package://orbbec_astra_ip/meshes/glass-binary.stl"
 bottle_mesh = "../meshes/bottle.stl"
 scene = moveit_commander.PlanningSceneInterface()
 
-# initialize global variables
-q = deque([])
-br = tf.TransformBroadcaster()
+
 
 text_marker = Marker()
 bottle_marker = Marker()
@@ -42,7 +40,6 @@ glass_marker = Marker()
 bottle_poses = {}
 
 candidates = []
-labels = None
 
 # receive bottles message and put those with images into the queue
 def bottle_callback(bottles):
@@ -57,7 +54,7 @@ def distanceOf(pose1, pose2):
     return np.linalg.norm([p1.x - p2.x, p1.y - p2.y, p1.z - p2.z])
 
 def consume_candidate(candidate):
-    global labels, candidates
+    global labels, candidates, br
     prediction = make_prediction(candidate)
     pose = candidate.pose.pose
     if prediction is not None:
@@ -96,7 +93,7 @@ def consume_candidate(candidate):
         for i, (label, match) in enumerate(zip(labels, matching)):
             if match is not None and match[1] > 0.8:
                 (pose, pred, time, count) = candidates[match[0]]
-                if(count > 2):
+                if(count > 1):
                     p = pose.position
                     o = pose.orientation
                     obj_height = 0.12 if label == 'glass' else 0.28
@@ -143,7 +140,7 @@ def find_match(matching, candidates, i):
 
 # get bottle label and publish mesh collion object
 def consume_bottle(bottle):
-    global marker_pub, marker_text_pub, text_marker
+    global marker_pub, marker_text_pub, text_marker, br
     bottle_id, label = classify_bottle(bottle)
     if(label is not None):
         obj_height = 0.12 if label == 'glass' else 0.3
@@ -253,10 +250,15 @@ def interpolate(p1, p2, fraction):
 
 # main function
 if __name__=="__main__":
-    global q, marker_pub, marker_text_pub, labels
+    global q, marker_pub, marker_text_pub, labels, br
+
+    q = deque([])
 
     #initialize node
     rospy.init_node("sample_collector", anonymous=True)
+
+    # initialize global variables
+    br = tf.TransformBroadcaster()
 
     # load classifier
     classifier = label_classifier()
