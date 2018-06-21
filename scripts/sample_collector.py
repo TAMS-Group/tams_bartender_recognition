@@ -25,7 +25,7 @@ class sample_collector:
         output = "Press <Enter> to take samples!"
         sample_id = 0
         while(not rospy.is_shutdown()):
-            command = raw_input(output)
+            command = raw_input(output) # check for enter pressed
             if(command==""):
                 output = self.take_sample(sample_id)
                 sample_id+=1
@@ -51,10 +51,16 @@ class sample_collector:
         ret_msg = "Saving sample to file: "
         image = self.last_image 
         if(image is not None):
+            target_dir = 'samples'
+            if not os.path.isdir(target_dir):
+                if os.path.isfile(target_dir):
+                    os.remove(target_dir)
+                os.mkdir(target_dir)
+
             try:
                 cv_image = CvBridge().imgmsg_to_cv2(image, "bgr8")
-                filename = "samples/bottle"+str(i)+".png"
-                cv2.imwrite(filename, cv_image)
+                filename = "bottle"+str(i)+".png"
+                cv2.imwrite(target_dir + '/' + filename, cv_image)
                 ret_msg += filename
             except CvBridgeError as e:
                 ret_msg = e
