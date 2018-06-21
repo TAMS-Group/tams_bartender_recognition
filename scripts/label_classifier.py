@@ -92,12 +92,12 @@ def prepare_classifier2(output_dim):
 
     model.add(Dense(units = output_dim, activation = 'softmax'))
     # Compiling the CNN
-    model.compile(optimizer = 'rmsprob', loss = 'categorical_crossentropy', metrics = ['accuracy'])
+    model.compile(optimizer = 'rmsprop', loss = 'categorical_crossentropy', metrics = ['accuracy'])
     return model
 
 
 def get_model(labels):
-    classifier = prepare_vgg(len(labels))
+    classifier = prepare_classifier(len(labels))
     # Initialising the CN    # Part 2 - Fitting the CNN to the images
     from keras.preprocessing.image import ImageDataGenerator
     train_datagen = ImageDataGenerator(rescale = 1./255,
@@ -139,26 +139,27 @@ def get_labels_and_images(directory):
         data[label] = images
     return data
 
-
-
 class label_classifier:
     def __init__(self):
         self.labels = sorted([d.split("/")[1] for d in glob.glob('labels_test/*')])
         self.classifier = init_label_classifier()
 
+    def get_labels(self):
+        return self.labels
+
     def predict_image(self, img):
         img = cv2.resize(img, dsize=(96,96), interpolation=cv2.INTER_CUBIC)
         img = img_to_array(img)
         img = np.expand_dims(img, axis = 0)
-        prediction = self.classifier.predict(img)[0]
-        return np.argmax(prediction)
+        return self.classifier.predict(img)[0]
 
     def predict_label(self, img):
-        i = self.predict_image(img)
+        prediction = self.predict_image(img)
+        np.argmax(prediction)
         return i, self.labels[i]
 
 def init_label_classifier():
-    model_file = "labels_model.h5"
+    model_file = "models/model_default.h5"
     if(glob.glob(model_file)):
         classifier = load_model(model_file)
     else:
