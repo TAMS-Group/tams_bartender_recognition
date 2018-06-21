@@ -58,10 +58,9 @@ def consume_candidate(candidate):
     prediction = make_prediction(candidate)
     pose = candidate.pose.pose
     if prediction is not None:
-        now = rospy.Time.now()
 
         # remove old candidates
-        candidates = filter(lambda (p,pr,t,c): (now - rospy.Duration(5.0)) < t, candidates)
+        candidates = filter(lambda (p,pr,t,c): (rospy.Time.now() - rospy.Duration(5.0)) < t, candidates)
 
         # find closest candidates
         closest_i = None
@@ -72,12 +71,11 @@ def consume_candidate(candidate):
                     min_dist = dist
                     closest_i = i
 
-        # update closest candidate or insert new one
+        # update poses and predictions of closest candidate or insert new one
         if closest_i is not None and min_dist < 0.1:
             (c_pose, c_pred, c_time, c_count) = candidates[closest_i]
             w = 0.2
             new_pred = ( w * prediction + (1-w ) * c_pred )
-            #new_pred = ( prediction + c_pred )
             new_pose = interpolate(c_pose, pose, 0.3)
             candidates[closest_i] = (new_pose, new_pred, rospy.Time.now(), c_count+1)
         else:
@@ -85,9 +83,9 @@ def consume_candidate(candidate):
 
         # find candidate-label matching
         matching = [None for _ in labels]
-        temp_candidates = copy.deepcopy(candidates)
+        candidates_copy = copy.deepcopy(candidates)
         for i in range(len(candidates)):
-            matching = find_match(matching, candidates, i)
+            matching = find_match(matching, candidates_copy, i)
 
         # publish matched objects
         for i, (label, match) in enumerate(zip(labels, matching)):
@@ -109,7 +107,7 @@ def find_match(matching, candidates, i):
     confidence = pred[argmax]
 
     # no confidence
-    if confidence > 0.0:
+    if confidence > 0.5:
 
         # check for existing match
         match = matching[argmax]
