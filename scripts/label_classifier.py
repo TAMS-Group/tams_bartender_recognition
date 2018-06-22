@@ -12,6 +12,8 @@ from keras.layers import Dense
 from keras.layers import Dropout
 from keras import applications
 
+import pickle
+
 
 import cv2
 import matplotlib.pyplot as plt
@@ -69,7 +71,7 @@ def prepare_classifier(output_dim):
 
 def prepare_classifier2(output_dim):
     model = Sequential()
-    model.add(Conv2D(32, (3, 3), input_shape = (96, 96, 3), activation = 'relu'))
+    model.add(Conv2D(64, (3, 3), input_shape = (96, 96, 3), activation = 'relu'))
     model.add(MaxPooling2D(pool_size = (2, 2)))
 
     model.add(Dropout(0.1))
@@ -79,7 +81,7 @@ def prepare_classifier2(output_dim):
 
     model.add(Dropout(0.1))
 
-    model.add(Conv2D(64, (3, 3), activation = 'relu'))
+    model.add(Conv2D(32, (3, 3), activation = 'relu'))
     model.add(MaxPooling2D(pool_size = (2, 2)))
 
     model.add(Dropout(0.1))
@@ -88,7 +90,7 @@ def prepare_classifier2(output_dim):
 
     model.add(Dense(units = 64, activation = 'relu'))
 
-    model.add(Dropout(0.8))
+    model.add(Dropout(0.3))
 
     model.add(Dense(units = output_dim, activation = 'softmax'))
     # Compiling the CNN
@@ -97,7 +99,7 @@ def prepare_classifier2(output_dim):
 
 
 def get_model(labels):
-    classifier = prepare_classifier(len(labels))
+    classifier = prepare_classifier2(len(labels))
     # Initialising the CN    # Part 2 - Fitting the CNN to the images
     from keras.preprocessing.image import ImageDataGenerator
     train_datagen = ImageDataGenerator(rescale = 1./255,
@@ -141,8 +143,8 @@ def get_labels_and_images(directory):
 
 class label_classifier:
     def __init__(self):
-        self.labels = sorted([d.split("/")[1] for d in glob.glob('labels_test/*')])
-        self.classifier = init_label_classifier()
+        labels = sorted([d.split("/")[1] for d in glob.glob('labels_test/*')])
+        self.classifier, self.labels = init_label_classifier(labels)
 
     def get_labels(self):
         return self.labels
@@ -158,33 +160,48 @@ class label_classifier:
         np.argmax(prediction)
         return i, self.labels[i]
 
-def init_label_classifier():
-    model_file = "models/labels_model_v2.h5"
+def init_label_classifier(labels):
+    version = "v3"
+    model_dir = "models"
+
+    # check for existing model
+    model_file = str.format("{}/model_{}.h5", model_dir, version)
+    labels_file = str.format("{}/labels_{}.txt", model_dir, version)
     if(glob.glob(model_file)):
         classifier = load_model(model_file)
+        if glob.glob(labels_file):
+            lf = open(labels_file, 'rb')
+            l = pickle.load(lf)
+            lf.close()
+            if l is not None:
+                print "found labels", l
+                labels = l
     else:
-        data = get_labels_and_images('labels_test')
-        classifier = get_model(data.keys())
+        classifier = get_model(labels)
         classifier._make_predict_function()
         classifier.save(model_file)
-    return classifier
+        lf = open(labels_file, 'wb')
+        pickle.dump(sorted(labels), lf)
+        lf.close()
+
+    return classifier, labels
 
 if __name__=="__main__":
     #data = get_labels_and_images('labels_test')
     #print data
 
     # load model from file or train new
-    classifier = init_label_classifier()
+    classifier = label_classifier()
 
-    from keras.preprocessing import image
-    for i,d in enumerate(sorted(glob.glob('labels_test/*'))):
-        label = d.split('/')[1]
-        imgfiles = glob.glob(d+'/*')
-        print label 
-        count = 0
-        for imgfile in imgfiles:
-            test_image = image.load_img(imgfile, target_size = (96, 96))
-            test_image = image.img_to_array(test_image)
-            test_image = np.expand_dims(test_image, axis = 0)
-            count += classifier.predict(test_image)[0][i]
-        print count, "/", len(imgfiles)
+    #from keras.preprocessing import image
+    #for i,d in enumerate(sorted(glob.glob('labels_test/*'))):
+    #    label = d.split('/')[1]
+    #    imgfiles = glob.glob(d+'/*')
+    #    print label
+    #    count = 0
+    #    for imgfile in imgfiles:
+    #        test_image = image.load_img(imgfile, target_size = (96, 96))
+    #        test_image = image.img_to_array(test_image)
+    #        test_image = np.expand_dims(test_image, axis = 0)
+    #        count += classifier.predict(test_image)[0][i]
+    #    print count, "/", len(imgfiles)
