@@ -13,6 +13,7 @@ from sensor_msgs.msg import Image
 # OpenCV
 import cv2
 from cv_bridge import CvBridge, CvBridgeError
+import os
 
 
 class sample_collector:
