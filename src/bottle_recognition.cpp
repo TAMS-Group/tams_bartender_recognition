@@ -19,7 +19,7 @@
 #include <pcl/sample_consensus/method_types.h>
 #include <pcl/sample_consensus/model_types.h>
 #include <pcl/segmentation/sac_segmentation.h>
-#include <pcl/features/normal_3d.h>
+#include <pcl/features/normal_3d_omp.h>
 
 
 #include <iostream>
@@ -74,7 +74,7 @@ void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, dou
 
 void estimateNormals(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointCloud<pcl::Normal>& normals) {
     pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB> ());
-    pcl::NormalEstimation<pcl::PointXYZRGB, pcl::Normal> ne;
+    pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> ne;
     ne.setSearchMethod (tree);
     ne.setInputCloud (cloud);
     ne.setKSearch (30);
@@ -94,7 +94,7 @@ void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
     sphere_filter.filter (outcloud);
 }
 
-void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
+void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud, double min=0.015, double max=0.2) {
     float a = plane_coefs->values[0];
     float b = plane_coefs->values[1];
     float c = plane_coefs->values[2];
@@ -104,10 +104,19 @@ void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl
 
     for(pcl::PointXYZRGB point : *incloud) {
         float point_distance = (point.x * a + point.y * b + point.z * c - d / sqrt_abc);
-        if(0.015 < point_distance && point_distance < 0.3) {
+        if(0.015 < point_distance && point_distance < 0.2) {
             outcloud.push_back(point);
         }
     }
+}
+
+void voxelFilter(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud)
+{
+	// Create the filtering object
+	pcl::VoxelGrid<pcl::PointXYZRGB> sor;
+	sor.setInputCloud (incloud);
+	sor.setLeafSize (0.005f, 0.005f, 0.005f);
+	sor.filter (outcloud);
 }
 
 void removeStatisticalOutliers(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
@@ -124,7 +133,7 @@ bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Poi
     seg.setOptimizeCoefficients (true);
     seg.setModelType (pcl::SACMODEL_PLANE);
     seg.setMethodType (pcl::SAC_RANSAC);
-    seg.setMaxIterations (1000);
+    seg.setMaxIterations (100);
     seg.setDistanceThreshold (0.03);
     seg.setInputCloud (cloud);
 
@@ -143,8 +152,8 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
     seg.setModelType (pcl::SACMODEL_CYLINDER);
     seg.setMethodType (pcl::SAC_RANSAC);
     seg.setNormalDistanceWeight (0.05);
-    seg.setMaxIterations (2000);
-    seg.setDistanceThreshold (0.05);
+    seg.setMaxIterations (5000);
+    seg.setDistanceThreshold (0.15);
     seg.setRadiusLimits (0.035, 0.045);
     seg.setInputCloud (cloud);
     seg.setInputNormals (normals);
@@ -346,12 +355,13 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
 	tree->setInputCloud (cloud_filtered);
 
 	pcl::EuclideanClusterExtraction<pcl::PointXYZRGB> ec;
-	ec.setClusterTolerance (0.02);
-	ec.setMinClusterSize (1500);
+	ec.setClusterTolerance (0.06);
+	ec.setMinClusterSize (80);
 	ec.setMaxClusterSize (5000);
 	ec.setSearchMethod (tree);
 	ec.setInputCloud (cloud_filtered);
 	ec.extract (cluster_indices);
+
 	std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
 	std::cerr << "Cluster sizes: ";
 	std::vector<int> sizes;
@@ -382,12 +392,19 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     //
 
     // filter range of view
-    filterRange(1.3, cloud, *cloud_filtered);
+    filterRange(1.2, cloud, *cloud_filtered);
+
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr voxels (new pcl::PointCloud<pcl::PointXYZRGB>);
+
+		// downsample cloud
+    std::vector<int> mapping;
+    pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, mapping);
+		voxelFilter(cloud_filtered, *voxels);
 
     // segment the surface and get coefficients
     pcl::ModelCoefficients::Ptr surface_coefs (new pcl::ModelCoefficients ());
     pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
-    if (!segmentSurface(cloud_filtered, inliers, surface_coefs)) return;
+    if (!segmentSurface(voxels, inliers, surface_coefs)) return;
 
     // normalize coefficients and flip orientation if surface normal points away from camera
     normalizeSurfaceCoefficients(surface_coefs);
@@ -401,10 +418,10 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
     // filter point cloud to region above surface
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceVoxels (new pcl::PointCloud<pcl::PointXYZRGB>);
     filterAboveSurface(surface_coefs, cloud_filtered, *surfaceCloud);
-
-    // remove statistical outliers
-    removeStatisticalOutliers(surfaceCloud, *surfaceCloud);
+    filterAboveSurface(surface_coefs, voxels, *surfaceVoxels);
+    surfaceVoxels->header.frame_id = cloud->header.frame_id;
 
     // publish segmented surface cloud
     pcl::PCLPointCloud2 outcloud;
@@ -413,11 +430,13 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     surface_pub.publish (outcloud);
 
 
-    std::vector<int> mapping;
-    pcl::removeNaNFromPointCloud(*surfaceCloud, *surfaceCloud, mapping);
+    // remove statistical outliers
+    removeStatisticalOutliers(surfaceVoxels, *surfaceVoxels);
+
+    pcl::removeNaNFromPointCloud(*surfaceVoxels, *surfaceVoxels, mapping);
 
     std::vector<pcl::PointIndices> cluster_indices;
-    extractClusters(surfaceCloud, cluster_indices);
+    extractClusters(surfaceVoxels, cluster_indices);
 
     orbbec_astra_ip::SegmentedBottleArray bottles;
     bottles.header.frame_id = surface_frame;
@@ -429,7 +448,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
       pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
       pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
       for (int i : cluster.indices) {
-        cluster_cloud->points.push_back (surfaceCloud->points[i]);
+        cluster_cloud->points.push_back (surfaceVoxels->points[i]);
       }
       cluster_cloud->width = cluster_cloud->points.size();
       cluster_cloud->height = 1;
