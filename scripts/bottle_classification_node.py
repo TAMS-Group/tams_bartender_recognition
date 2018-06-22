@@ -60,7 +60,7 @@ def consume_candidate(candidate):
     if prediction is not None:
 
         # remove old candidates
-        candidates = filter(lambda (p,pr,t,c): (rospy.Time.now() - rospy.Duration(5.0)) < t, candidates)
+        candidates = filter(lambda (p,pr,t,c): (rospy.Time.now() - rospy.Duration(2.5)) < t, candidates)
 
         # find closest candidates
         closest_i = None
@@ -74,9 +74,10 @@ def consume_candidate(candidate):
         # update poses and predictions of closest candidate or insert new one
         if closest_i is not None and min_dist < 0.1:
             (c_pose, c_pred, c_time, c_count) = candidates[closest_i]
-            w = 0.2
-            new_pred = ( w * prediction + (1-w ) * c_pred )
-            new_pose = interpolate(c_pose, pose, 0.3)
+            #w = 0.2
+            #new_pred = ( w * prediction + (1-w ) * c_pred )
+            new_pred = prediction + c_pred
+            new_pose = interpolate(c_pose, pose, 0.2)
             candidates[closest_i] = (new_pose, new_pred, rospy.Time.now(), c_count+1)
         else:
             candidates.append((pose, prediction, rospy.Time.now(), 1))
@@ -91,14 +92,14 @@ def consume_candidate(candidate):
         for i, (label, match) in enumerate(zip(labels, matching)):
             if match is not None and match[1] > 0.8:
                 (pose, pred, time, count) = candidates[match[0]]
-                if(count > 1):
+                if(count > 2):
                     p = pose.position
                     o = pose.orientation
-                    obj_height = 0.12 if label == 'glass' else 0.28
+                    obj_height = 0.12 if label.startswith('glass') else 0.28
                     transl = (p.x, p.y, 0.5*obj_height)
                     orient = (o.x, o.y, o.z, o.w)
                     br.sendTransform(transl, orient, rospy.Time.now(), label, "/surface")
-                    publish_markers(i, label, 2)
+                    publish_markers(i, label, 1)
 
 
 def find_match(matching, candidates, i):
@@ -141,7 +142,7 @@ def consume_bottle(bottle):
     global marker_pub, marker_text_pub, text_marker, br
     bottle_id, label = classify_bottle(bottle)
     if(label is not None):
-        obj_height = 0.12 if label == 'glass' else 0.3
+        obj_height = 0.12 if label.startswith('glass') else 0.3
         bp = bottle.pose.pose
         bp.position.z = 0.5*obj_height;
         #bottle_poses[label] = interpolate(bottle_poses[label], bp, 0.1) if label in bottle_poses else bp
@@ -161,11 +162,11 @@ def consume_bottle(bottle):
 
 def publish_markers(marker_id, label, duration):
     publish_object_marker(marker_id, label, duration)
-    publish_text_marker(marker_id + 100, label, duration, 0.12 if label=='glass' else 0.28)
+    publish_text_marker(marker_id + 100, label, duration, 0.12 if label.startswith('glass') else 0.28)
 
 def publish_object_marker(marker_id, label, duration):
     global glass_marker, bottle_marker, marker_pub
-    marker = glass_marker if label == 'glass' else bottle_marker
+    marker = glass_marker if label.startswith('glass') else bottle_marker
     marker.id = marker_id
     marker.header.frame_id = label
     marker.header.stamp = rospy.Time.now()
