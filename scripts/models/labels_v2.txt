@@ -1,0 +1,14 @@
+(lp0
+S'bitter_lemon'
+p1
+aS'cointreau'
+p2
+aS'gin'
+p3
+aS'glass'
+p4
+aS'orange_juice'
+p5
+aS'tequila'
+p6
+a.
