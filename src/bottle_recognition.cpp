@@ -399,7 +399,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 		// downsample cloud
     std::vector<int> mapping;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, mapping);
-		voxelFilter(cloud_filtered, *voxels);
+    voxelFilter(cloud_filtered, *voxels);
 
     // segment the surface and get coefficients
     pcl::ModelCoefficients::Ptr surface_coefs (new pcl::ModelCoefficients ());
