@@ -15,7 +15,7 @@ import cv2
 from cv_bridge import CvBridge, CvBridgeError
 import os
 
-
+# Convenience tool to dump images of object candidates received from the pcl cluster extraction
 class sample_collector:
 
     def __init__(self):

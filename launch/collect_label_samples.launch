@@ -2,7 +2,7 @@
 <launch>
 	<include file="$(find astra_launch)/launch/astra.launch"/>
 
-	<node pkg="orbbec_astra_ip" type="pcl_bottle_recognition" name="bottle_recognition"/>
+	<node pkg="pcl_object_recognition" type="object_segmentation" name="object_segmentation"/>
 
 	<!--	<node pkg="orbbec_astra_ip" type="sample_collector.py" name="sample_collector"/>-->
 

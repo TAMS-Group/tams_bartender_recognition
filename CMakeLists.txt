@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(orbbec_astra_ip)
+project(pcl_object_recognition)
 
 add_compile_options(-std=c++11)
 
@@ -19,8 +19,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_message_files(
 	FILES
-	SegmentedBottle.msg
-	SegmentedBottleArray.msg
+	SegmentedObject.msg
+	SegmentedObjectArray.msg
 	)
 
 generate_messages(
@@ -40,6 +40,6 @@ include_directories(
 	${catkin_INCLUDE_DIRS}
 )
 
-add_executable(pcl_bottle_recognition src/bottle_recognition.cpp)
-target_link_libraries(pcl_bottle_recognition ${catkin_LIBRARIES})
-add_dependencies(pcl_bottle_recognition ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_executable(object_segmentation src/object_segmentation.cpp)
+target_link_libraries(object_segmentation ${catkin_LIBRARIES})
+add_dependencies(object_segmentation ${${PROJECT_NAME}_EXPORTED_TARGETS})

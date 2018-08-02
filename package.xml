@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>orbbec_astra_ip</name>
+  <name>pcl_object_recognition</name>
   <version>0.0.0</version>
-  <description>The orbbec_astra_ip package</description>
+  <description>The pcl_object_recognition package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->
