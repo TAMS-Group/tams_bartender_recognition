@@ -2,7 +2,5 @@
 *.swp
 *.pyc
 *.tar.gz
-scripts/labels
-scripts/labels_test
-scripts/labels_train
+labels
 scripts/*.h5
