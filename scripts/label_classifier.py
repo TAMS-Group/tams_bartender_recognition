@@ -14,6 +14,9 @@ from keras import applications
 
 import pickle
 
+import rospkg
+
+
 
 import cv2
 import matplotlib.pyplot as plt
@@ -98,7 +101,8 @@ def prepare_classifier2(output_dim):
     return model
 
 
-def get_model(labels):
+def get_model(labels_dir):
+    labels = sorted([d.split("/")[1] for d in glob.glob(labels_dir+'labels_test/*')])
     classifier = prepare_classifier2(len(labels))
     # Initialising the CN    # Part 2 - Fitting the CNN to the images
     from keras.preprocessing.image import ImageDataGenerator
@@ -111,11 +115,11 @@ def get_model(labels):
             fill_mode='nearest',
             horizontal_flip = False)
     test_datagen = ImageDataGenerator(rescale = 1./255)
-    training_set = train_datagen.flow_from_directory('labels_train',
+    training_set = train_datagen.flow_from_directory(labels_dir+'labels_train',
             target_size = (96, 96),
             batch_size = 16,
             class_mode = 'categorical')
-    test_set = test_datagen.flow_from_directory('labels_test',
+    test_set = test_datagen.flow_from_directory(labels_dir+'labels_test',
             target_size = (96, 96),
             batch_size = 16,
             class_mode = 'categorical')
@@ -125,7 +129,7 @@ def get_model(labels):
             epochs = 25,
             validation_data = test_set,
             validation_steps = 800 // 16)
-    return classifier
+    return classifier, labels
 
 def get_labels_and_images(directory):
     dirs = glob.glob(directory+'/*')
@@ -142,9 +146,8 @@ def get_labels_and_images(directory):
     return data
 
 class label_classifier:
-    def __init__(self):
-        labels = sorted([d.split("/")[1] for d in glob.glob('labels_test/*')])
-        self.classifier, self.labels = init_label_classifier(labels)
+    def __init__(self, bottle_type='default', version='v3'):
+        self.classifier, self.labels = init_label_classifier(labels, bottle_type, version)
 
     def get_labels(self):
         return self.labels
@@ -160,11 +163,12 @@ class label_classifier:
         np.argmax(prediction)
         return i, self.labels[i]
 
-def init_label_classifier(labels):
-    version = "v3"
-    model_dir = "models"
+def init_label_classifier(labels, bottle_type, version):
+    rospack = rospkg.RosPack()
+    package_dir = rospack.get_path('orbbec_astra_ip')
 
     # check for existing model
+    model_dir = str.format("{}/models/{}/", package_dir, bottle_type)
     model_file = str.format("{}/model_{}.h5", model_dir, version)
     labels_file = str.format("{}/labels_{}.txt", model_dir, version)
     if(glob.glob(model_file)):
@@ -177,7 +181,8 @@ def init_label_classifier(labels):
                 print "found labels", l
                 labels = l
     else:
-        classifier = get_model(labels)
+        labels_dir = str.format("{}/labels/{}/", package_dir, bottle_type)
+        classifier, labels = get_model(labels_dir)
         classifier._make_predict_function()
         classifier.save(model_file)
         lf = open(labels_file, 'wb')

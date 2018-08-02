@@ -1,4 +1,6 @@
 <?xml version="1.0"?>
 <launch>
 	<include file="$(find astra_launch)/launch/astra.launch"/>
+
+	<node pkg='orbbec_astra_ip' type='bottle_classification_node.py' name='bottle_classification' log='screen'/>
 </launch>
