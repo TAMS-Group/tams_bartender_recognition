@@ -396,7 +396,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr voxels (new pcl::PointCloud<pcl::PointXYZRGB>);
 
-		// downsample cloud
+    // downsample cloud
     std::vector<int> mapping;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, mapping);
     voxelFilter(cloud_filtered, *voxels);
@@ -443,7 +443,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     bottles.header.stamp = ros::Time::now();
 
     for(const pcl::PointIndices cluster : cluster_indices) {
-	    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+      pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
       pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
       pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
       pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
@@ -681,7 +681,6 @@ int main (int argc, char** argv)
     clusters_pub = nh.advertise<sensor_msgs::PointCloud2> ("/extracted_clusters", 1);
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
     bottles_pub = nh.advertise<orbbec_astra_ip::SegmentedBottleArray>("/segmented_bottles", 1);
-
 
     // Spin
     ros::spin();
