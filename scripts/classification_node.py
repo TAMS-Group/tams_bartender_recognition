@@ -73,9 +73,9 @@ def consume_candidate(candidate):
         # update poses and predictions of closest candidate or insert new one
         if closest_i is not None and min_dist < 0.1:
             (c_pose, c_pred, c_time, c_count) = candidates[closest_i]
-            #w = 0.2
-            #new_pred = ( w * prediction + (1-w ) * c_pred )
-            new_pred = prediction + c_pred
+            w = 0.2
+            new_pred = ( w * prediction + (1-w ) * c_pred )
+            #new_pred = prediction + c_pred
             new_pose = interpolate(c_pose, pose, 0.2)
             candidates[closest_i] = (new_pose, new_pred, rospy.Time.now(), c_count+1)
         else:
