@@ -143,7 +143,7 @@ def get_labels_and_images(directory):
     return data
 
 class label_classifier:
-    def __init__(self, object_group='default', version='v3'):
+    def __init__(self, object_group='default', version='3'):
         self.classifier, self.labels = init_label_classifier(object_group, version)
 
     def get_labels(self):
@@ -166,8 +166,8 @@ def init_label_classifier(object_group, version):
 
     # check for existing model
     model_dir = str.format("{}/models/{}/", package_dir, object_group)
-    model_file = str.format("{}/model_{}.h5", model_dir, version)
-    labels_file = str.format("{}/labels_{}.txt", model_dir, version)
+    model_file = str.format("{}/model_v{}.h5", model_dir, version)
+    labels_file = str.format("{}/labels_v{}.txt", model_dir, version)
     if(glob.glob(model_file)):
         classifier = load_model(model_file)
         if glob.glob(labels_file):

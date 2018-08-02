@@ -1,5 +1,9 @@
 <?xml version="1.0"?>
 <launch>
-	<node pkg='pcl_object_recognition' type='classification_node.py' name='object_classification' output='screen'/>
+	<node pkg='pcl_object_recognition' type='classification_node.py' name='object_classification' output='screen'>
+		<param name="object_group" value="default" />
+		<param name="version" value="3"/>
+	</node>
+
 	<node pkg='pcl_object_recognition' type='object_segmentation' name='object_segmentation' output='screen'/>
 </launch>

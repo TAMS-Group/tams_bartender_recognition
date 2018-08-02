@@ -257,9 +257,11 @@ if __name__=="__main__":
 
     # initialize global variables
     br = tf.TransformBroadcaster()
+    object_group = rospy.get_param("~object_group")
+    version = rospy.get_param("~version")
 
     # load classifier
-    classifier = label_classifier()
+    classifier = label_classifier(object_group, version)
     labels = classifier.get_labels()
 
     # initiialize bottle subscriber
