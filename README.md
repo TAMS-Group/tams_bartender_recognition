@@ -1,4 +1,4 @@
-# PCL Object Recognition
+# TAMS Bartender Recognition
 
 This ROS package is a simple object recognition pipeline developed for bottle and glass detection.
 The <code>object_segmentation</code> node extracts object candidates by cylinder segmentation and publishes positions and a 2D snapshots.
