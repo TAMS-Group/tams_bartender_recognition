@@ -512,9 +512,9 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
       }
     }
 
-    objects_pub.publish(objects);
     if(objects.objects.size() > 0)
     {
+    	objects_pub.publish(objects);
 	object_image_pub.publish(objects.objects[0].image);
     }
 }
