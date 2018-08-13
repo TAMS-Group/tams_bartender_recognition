@@ -7,7 +7,7 @@ import select
 import rospy
 
 # ROS messages
-from orbbec_astra_ip.msg import SegmentedBottleArray, SegmentedBottle
+from pcl_object_recognition.msg import SegmentedObjectArray, SegmentedObject
 from sensor_msgs.msg import Image
 
 # OpenCV
@@ -19,7 +19,7 @@ import os
 class sample_collector:
 
     def __init__(self):
-        self.bottle_sub = rospy.Subscriber("/segmented_bottles", SegmentedBottleArray, self.bottle_callback)
+        self.object_sub = rospy.Subscriber("/segmented_objects", SegmentedObjectArray, self.object_callback)
         self.image_pub = rospy.Publisher("/label_samples", Image, queue_size=1)
         self.bridge = CvBridge()
         self.last_image = None
@@ -38,14 +38,14 @@ class sample_collector:
         #    if line:
         #        on_keyboard_input(line)
 
-    def bottle_callback(self, bottles):
+    def object_callback(self, objects):
         #rospy.loginfo(rospy.get_caller_id() + "I heard %s", data.data)
-        if(bottles.count == 1):
-            bottle = bottles.bottles[0]
-            if(len(bottle.image.data) > 0):
-                #print "Recieved new bottle image sample!"
-                self.image_pub.publish(bottle.image)
-                self.last_image = bottle.image
+        if(objects.count == 1):
+            object = objects.objects[0]
+            if len(object.image.data):
+                self.last_image = object.image
+        elif objects.count > 1:
+            rospy.logwarn('Got {} objects instead of one.'.format(objects.count))
 
 
     def take_sample(self, i):
@@ -60,7 +60,7 @@ class sample_collector:
 
             try:
                 cv_image = CvBridge().imgmsg_to_cv2(image, "bgr8")
-                filename = "bottle"+str(i)+".png"
+                filename = "object"+str(i)+".png"
                 cv2.imwrite(target_dir + '/' + filename, cv_image)
                 ret_msg += filename
             except CvBridgeError as e:
@@ -74,7 +74,7 @@ def main(args):
     sc = sample_collector()
     try:
         rospy.spin()
-    except KeyboradInterrupt:
+    except KeyboardInterrupt:
         print "Shutting down!"
     cv2.destroyAllWindows()
 
