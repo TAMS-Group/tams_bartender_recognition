@@ -4,10 +4,14 @@
 
 	<node pkg="pcl_object_recognition" type="object_segmentation" name="object_segmentation"/>
 
-	<!--	<node pkg="orbbec_astra_ip" type="sample_collector.py" name="sample_collector"/>-->
+	<!-- node pkg="pcl_object_recognition" type="sample_collector.py" name="sample_collector"/ -->
 
-	<node pkg="image_view" type="image_view" name="sample_view" respawn="false">
-		<remap from="image" to="/label_samples"/>
+	<node pkg="image_view" type="image_view" name="segmented_object" respawn="false">
+		<remap from="image" to="object_image"/>
+	</node>
+
+	<node pkg="image_view" type="image_view" name="recorded_object" respawn="false">
+		<remap from="image" to="label_samples"/>
 	</node>
 
 </launch>

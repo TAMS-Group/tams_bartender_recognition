@@ -55,7 +55,7 @@ struct BoundingBox {
 };
 
 
-ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub;
+ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub, object_image_pub;
 std::string surface_frame = "/surface";
 bool has_surface_transform = false;
 bool has_cylinder_transform = false;
@@ -513,6 +513,10 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     }
 
     objects_pub.publish(objects);
+    if(objects.objects.size() > 0)
+    {
+	object_image_pub.publish(objects.objects[0].image);
+    }
 }
 
 
@@ -531,6 +535,7 @@ int main (int argc, char** argv)
     clusters_pub = nh.advertise<sensor_msgs::PointCloud2> ("/extracted_clusters", 1);
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
     objects_pub = nh.advertise<pcl_object_recognition::SegmentedObjectArray>("/segmented_objects", 1);
+    object_image_pub = nh.advertise<sensor_msgs::Image>("/object_image", 1);
 
     // Spin
     ros::spin();

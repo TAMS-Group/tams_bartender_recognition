@@ -63,6 +63,7 @@ class sample_collector:
                 filename = "object"+str(i)+".png"
                 cv2.imwrite(target_dir + '/' + filename, cv_image)
                 ret_msg += filename
+                self.image_pub.publish(image)
             except CvBridgeError as e:
                 ret_msg = e
         else:
