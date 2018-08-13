@@ -33,7 +33,7 @@ class sample_collector:
                 output = self.take_sample()
             elif 0 <= int(command) <= 9:
                 self.set_class(command)
-                output = 'Switched to class {}.'
+                output = 'Switched to class {}.'.format(command)
             else:
                 output = "Unknown command: " + command
 
@@ -52,6 +52,7 @@ class sample_collector:
             rospy.logwarn('Got {} objects instead of one.'.format(objects.count))
 
     def set_class(self, class_number):
+        self.sample_id = 0
         if class_number == 0:
             self.target_dir = 'samples'
         else:
@@ -63,8 +64,6 @@ class sample_collector:
         image = self.last_image 
         if(image is not None):
             if not os.path.isdir(self.target_dir):
-                if os.path.isfile(self.target_dir):
-                    os.remove(self.target_dir)
                 os.mkdir(self.target_dir)
 
             try:
