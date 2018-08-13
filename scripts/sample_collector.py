@@ -2,6 +2,7 @@
 
 import sys
 import select
+import os.path
 
 #ROS
 import rospy
@@ -24,12 +25,11 @@ class sample_collector:
         self.bridge = CvBridge()
         self.last_image = None
         output = "Press <Enter> to take samples!"
-        sample_id = 0
+        self.sample_id = 0
         while(not rospy.is_shutdown()):
             command = raw_input(output) # check for enter pressed
             if(command==""):
-                output = self.take_sample(sample_id)
-                sample_id+=1
+                output = self.take_sample()
             else:
                 output = "Unknown command: " + command
 
@@ -48,7 +48,7 @@ class sample_collector:
             rospy.logwarn('Got {} objects instead of one.'.format(objects.count))
 
 
-    def take_sample(self, i):
+    def take_sample(self):
         ret_msg = "Saving sample to file: "
         image = self.last_image 
         if(image is not None):
@@ -60,8 +60,14 @@ class sample_collector:
 
             try:
                 cv_image = CvBridge().imgmsg_to_cv2(image, "bgr8")
-                filename = "object"+str(i)+".png"
-                cv2.imwrite(target_dir + '/' + filename, cv_image)
+
+                while True:
+                    filename = os.path.join(target_dir, "object" + str(self.sample_id)+".png")
+                    self.sample_id += 1
+                    if not os.path.isfile(filename):
+                        break
+
+                cv2.imwrite(filename, cv_image)
                 ret_msg += filename
                 self.image_pub.publish(image)
             except CvBridgeError as e:
