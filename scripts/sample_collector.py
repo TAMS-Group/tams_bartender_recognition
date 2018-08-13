@@ -24,12 +24,16 @@ class sample_collector:
         self.image_pub = rospy.Publisher("/label_samples", Image, queue_size=1)
         self.bridge = CvBridge()
         self.last_image = None
+        self.set_class(0)
         output = "Press <Enter> to take samples!"
         self.sample_id = 0
         while(not rospy.is_shutdown()):
             command = raw_input(output) # check for enter pressed
             if(command==""):
                 output = self.take_sample()
+            elif 0 <= int(command) <= 9:
+                self.set_class(command)
+                output = 'Switched to class {}.'
             else:
                 output = "Unknown command: " + command
 
@@ -47,22 +51,27 @@ class sample_collector:
         elif objects.count > 1:
             rospy.logwarn('Got {} objects instead of one.'.format(objects.count))
 
+    def set_class(self, class_number):
+        if class_number == 0:
+            self.target_dir = 'samples'
+        else:
+            self.target_dir = os.path.join('samples', str(class_number))
+
 
     def take_sample(self):
         ret_msg = "Saving sample to file: "
         image = self.last_image 
         if(image is not None):
-            target_dir = 'samples'
-            if not os.path.isdir(target_dir):
-                if os.path.isfile(target_dir):
-                    os.remove(target_dir)
-                os.mkdir(target_dir)
+            if not os.path.isdir(self.target_dir):
+                if os.path.isfile(self.target_dir):
+                    os.remove(self.target_dir)
+                os.mkdir(self.target_dir)
 
             try:
                 cv_image = CvBridge().imgmsg_to_cv2(image, "bgr8")
 
                 while True:
-                    filename = os.path.join(target_dir, "object" + str(self.sample_id)+".png")
+                    filename = os.path.join(self.target_dir, "object" + str(self.sample_id)+".png")
                     self.sample_id += 1
                     if not os.path.isfile(filename):
                         break
@@ -82,7 +91,7 @@ def main(args):
     try:
         rospy.spin()
     except KeyboardInterrupt:
-        print "Shutting down!"
+        print("Shutting down!")
     cv2.destroyAllWindows()
 
 if __name__=="__main__":
