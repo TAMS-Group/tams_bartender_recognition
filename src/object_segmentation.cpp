@@ -153,7 +153,7 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
     seg.setNormalDistanceWeight (0.05);
     seg.setMaxIterations (5000);
     seg.setDistanceThreshold (0.15);
-    seg.setRadiusLimits (0.035, 0.045);
+    seg.setRadiusLimits (0.028, 0.045);
     seg.setInputCloud (cloud);
     seg.setInputNormals (normals);
 
