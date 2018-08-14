@@ -36,7 +36,7 @@ After the run, remove only those images, where the object is clearly not recogni
 ### 2. Create a labeled directory structure
 
 Before training new models, the image files must be labeled and separated into training and test sets.
-Create a directory structure inside the package as showed below.
+The classifier expects the samples in a file structure as shown below.
 
 ```
 <package>
@@ -57,6 +57,11 @@ It is used to reference the model when launching the classifier later on.
 The directories labels_test and labels_train should both contain identical directories named after the object classes.
 Split the images into training and test set and move them into the corresponding directories.
 A good split ratio would be something like 2:1 or 3:1 depending on the sample count.
+
+This can be done using the <code>split_datasets.py</code> script inside the tool directory.
+Just create 'labels' and 'group' directory and move your samples into a subdirectory named 'labels'.
+Copy the script into 'group', change to that directory and execute it, to automatically split the samples into train and test sets.
+
 
 ### 3. Train the model
 
