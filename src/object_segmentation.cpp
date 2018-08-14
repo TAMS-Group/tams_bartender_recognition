@@ -55,7 +55,7 @@ struct BoundingBox {
 };
 
 
-ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub;
+ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub, object_image_pub;
 std::string surface_frame = "/surface";
 bool has_surface_transform = false;
 bool has_cylinder_transform = false;
@@ -153,7 +153,7 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
     seg.setNormalDistanceWeight (0.05);
     seg.setMaxIterations (5000);
     seg.setDistanceThreshold (0.15);
-    seg.setRadiusLimits (0.035, 0.045);
+    seg.setRadiusLimits (0.028, 0.045);
     seg.setInputCloud (cloud);
     seg.setInputNormals (normals);
 
@@ -361,17 +361,17 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
 	ec.setInputCloud (cloud_filtered);
 	ec.extract (cluster_indices);
 
-	std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
-	std::cerr << "Cluster sizes: ";
+	//std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
+	//std::cerr << "Cluster sizes: ";
 	std::vector<int> sizes;
 	for(int i = 0; i < cluster_indices.size(); i++) {
 		const pcl::PointIndices indices = cluster_indices[i];
-		std::cerr << indices.indices.size() << ' ';
+		//std::cerr << indices.indices.size() << ' ';
 		for (int j : indices.indices){
 			setColor((*cloud_filtered)[j], i);
 		}
 	}
-	std::cerr << std::endl;
+	//std::cerr << std::endl;
 
 	pcl::PCLPointCloud2 outcloud;
 	pcl::toPCLPointCloud2 (*cloud_filtered, outcloud);
@@ -454,65 +454,75 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
       // segment cluster as cylinder
       estimateNormals(cluster_cloud, *cloud_normals);
-      if(segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs)) {
+      if(!segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs)) {
+        continue;
+      }
 
-        pcl_object_recognition::SegmentedObject object_msg;
+      pcl_object_recognition::SegmentedObject object_msg;
 
-        // basic object parameters
-        double x = cyl_coefs->values[0];
-        double y = cyl_coefs->values[1];
-        double z = cyl_coefs->values[2];
-        double object_radius = cyl_coefs->values[6];
+      // basic object parameters
+      double x = cyl_coefs->values[0];
+      double y = cyl_coefs->values[1];
+      double z = cyl_coefs->values[2];
+      double object_radius = cyl_coefs->values[6];
 
-        // retrieve object pose in surface frame
-        tf::Transform cam_to_object(tf::Quaternion::getIdentity(), tf::Vector3(x, y, z));
-        tf::Transform surface_to_object = surface_tf.inverse() * cam_to_object;
+      // retrieve object pose in surface frame
+      tf::Transform cam_to_object(tf::Quaternion::getIdentity(), tf::Vector3(x, y, z));
+      tf::Transform surface_to_object = surface_tf.inverse() * cam_to_object;
 
-        // fix object to upright rotation and align z with surface
-        surface_to_object.setRotation(tf::Quaternion::getIdentity());
-        tf::Vector3 objectXYZ = surface_to_object.getOrigin();
-        objectXYZ.setZ(0.0);
-        surface_to_object.setOrigin(objectXYZ);
+      // fix object to upright rotation and align z with surface
+      surface_to_object.setRotation(tf::Quaternion::getIdentity());
+      tf::Vector3 objectXYZ = surface_to_object.getOrigin();
+      objectXYZ.setZ(0.0);
+      surface_to_object.setOrigin(objectXYZ);
 
-        // create pose stamped in surface frame
-        object_msg.pose.header.frame_id = surface_frame;
-        tf::poseTFToMsg(surface_to_object, object_msg.pose.pose);
+      // create pose stamped in surface frame
+      object_msg.pose.header.frame_id = surface_frame;
+      tf::poseTFToMsg(surface_to_object, object_msg.pose.pose);
 
-        // Try to extract a 2d image of the object
-        try{
-            // get full 2d image of cloud
-            sensor_msgs::Image object_image;
-            object_image.width=100;
-            object_image.height=200;
-            pcl::toROSMsg(*cloud, object_image);
+      // Try to extract a 2d image of the object
+      try{
+          // get full 2d image of cloud
+          sensor_msgs::Image object_image;
+          object_image.width=100;
+          object_image.height=200;
+          pcl::toROSMsg(*cloud, object_image);
 
-            objectXYZ.setZ(0.15);
-            surface_to_object.setOrigin(objectXYZ);
-            cam_to_object = surface_tf * surface_to_object;
+          objectXYZ.setZ(0.15);
+          surface_to_object.setOrigin(objectXYZ);
+          cam_to_object = surface_tf * surface_to_object;
 
-            // define bounding box size and position
-            BoundingBox bb;
-            bb.x = cam_to_object.getOrigin().getX();
-            bb.y = cam_to_object.getOrigin().getY();
-            bb.z = cam_to_object.getOrigin().getZ();
-            bb.width = 0.15;
-            bb.height = 0.3;
-            bb.depth = 0.3;
+          // define bounding box size and position
+          BoundingBox bb;
+          bb.x = cam_to_object.getOrigin().getX();
+          bb.y = cam_to_object.getOrigin().getY();
+          bb.z = cam_to_object.getOrigin().getZ();
+          bb.width = 0.15;
+          bb.height = 0.3;
+          bb.depth = 0.3;
 
-            // extract object image from full image
-            object_msg.image = cutoutImage(&object_image, bb, cloud);
-            // add SegmentedObject message to SegmentedObjectArray
-            objects.objects.push_back(object_msg);
-            objects.count++;
-        }
-        catch (std::runtime_error)
-        {
-            ROS_ERROR("Unable to extract object image from cloud!");
-        }
+          // extract object image from full image
+          object_msg.image = cutoutImage(&object_image, bb, cloud);
+          // add SegmentedObject message to SegmentedObjectArray
+          objects.objects.push_back(object_msg);
+          objects.count++;
+      }
+      catch (std::runtime_error)
+      {
+          ROS_ERROR("Unable to extract object image from cloud!");
       }
     }
 
-    objects_pub.publish(objects);
+    if(objects.objects.size() > 0)
+    {
+      objects_pub.publish(objects);
+      object_image_pub.publish(objects.objects[0].image);
+    }
+    else
+    {
+      ROS_WARN_STREAM("Did not find any objects. Found " << cluster_indices.size() << " clusters (object candidates).");
+    }
+
 }
 
 
@@ -531,6 +541,7 @@ int main (int argc, char** argv)
     clusters_pub = nh.advertise<sensor_msgs::PointCloud2> ("/extracted_clusters", 1);
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
     objects_pub = nh.advertise<pcl_object_recognition::SegmentedObjectArray>("/segmented_objects", 1);
+    object_image_pub = nh.advertise<sensor_msgs::Image>("/object_image", 1);
 
     // Spin
     ros::spin();
