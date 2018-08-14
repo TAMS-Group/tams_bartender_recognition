@@ -361,17 +361,17 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
 	ec.setInputCloud (cloud_filtered);
 	ec.extract (cluster_indices);
 
-	std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
-	std::cerr << "Cluster sizes: ";
+	//std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
+	//std::cerr << "Cluster sizes: ";
 	std::vector<int> sizes;
 	for(int i = 0; i < cluster_indices.size(); i++) {
 		const pcl::PointIndices indices = cluster_indices[i];
-		std::cerr << indices.indices.size() << ' ';
+		//std::cerr << indices.indices.size() << ' ';
 		for (int j : indices.indices){
 			setColor((*cloud_filtered)[j], i);
 		}
 	}
-	std::cerr << std::endl;
+	//std::cerr << std::endl;
 
 	pcl::PCLPointCloud2 outcloud;
 	pcl::toPCLPointCloud2 (*cloud_filtered, outcloud);
@@ -514,9 +514,14 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
     if(objects.objects.size() > 0)
     {
-    	objects_pub.publish(objects);
-	object_image_pub.publish(objects.objects[0].image);
+      objects_pub.publish(objects);
+      object_image_pub.publish(objects.objects[0].image);
     }
+    else
+    {
+      ROS_WARN_STREAM("Did not find any objects. Found " << cluster_indices.size() << " clusters (object candidates).");
+    }
+
 }
 
 
