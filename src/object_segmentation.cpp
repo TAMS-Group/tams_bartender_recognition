@@ -454,61 +454,62 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
       // segment cluster as cylinder
       estimateNormals(cluster_cloud, *cloud_normals);
-      if(segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs)) {
+      if(!segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs)) {
+        continue;
+      }
 
-        pcl_object_recognition::SegmentedObject object_msg;
+      pcl_object_recognition::SegmentedObject object_msg;
 
-        // basic object parameters
-        double x = cyl_coefs->values[0];
-        double y = cyl_coefs->values[1];
-        double z = cyl_coefs->values[2];
-        double object_radius = cyl_coefs->values[6];
+      // basic object parameters
+      double x = cyl_coefs->values[0];
+      double y = cyl_coefs->values[1];
+      double z = cyl_coefs->values[2];
+      double object_radius = cyl_coefs->values[6];
 
-        // retrieve object pose in surface frame
-        tf::Transform cam_to_object(tf::Quaternion::getIdentity(), tf::Vector3(x, y, z));
-        tf::Transform surface_to_object = surface_tf.inverse() * cam_to_object;
+      // retrieve object pose in surface frame
+      tf::Transform cam_to_object(tf::Quaternion::getIdentity(), tf::Vector3(x, y, z));
+      tf::Transform surface_to_object = surface_tf.inverse() * cam_to_object;
 
-        // fix object to upright rotation and align z with surface
-        surface_to_object.setRotation(tf::Quaternion::getIdentity());
-        tf::Vector3 objectXYZ = surface_to_object.getOrigin();
-        objectXYZ.setZ(0.0);
-        surface_to_object.setOrigin(objectXYZ);
+      // fix object to upright rotation and align z with surface
+      surface_to_object.setRotation(tf::Quaternion::getIdentity());
+      tf::Vector3 objectXYZ = surface_to_object.getOrigin();
+      objectXYZ.setZ(0.0);
+      surface_to_object.setOrigin(objectXYZ);
 
-        // create pose stamped in surface frame
-        object_msg.pose.header.frame_id = surface_frame;
-        tf::poseTFToMsg(surface_to_object, object_msg.pose.pose);
+      // create pose stamped in surface frame
+      object_msg.pose.header.frame_id = surface_frame;
+      tf::poseTFToMsg(surface_to_object, object_msg.pose.pose);
 
-        // Try to extract a 2d image of the object
-        try{
-            // get full 2d image of cloud
-            sensor_msgs::Image object_image;
-            object_image.width=100;
-            object_image.height=200;
-            pcl::toROSMsg(*cloud, object_image);
+      // Try to extract a 2d image of the object
+      try{
+          // get full 2d image of cloud
+          sensor_msgs::Image object_image;
+          object_image.width=100;
+          object_image.height=200;
+          pcl::toROSMsg(*cloud, object_image);
 
-            objectXYZ.setZ(0.15);
-            surface_to_object.setOrigin(objectXYZ);
-            cam_to_object = surface_tf * surface_to_object;
+          objectXYZ.setZ(0.15);
+          surface_to_object.setOrigin(objectXYZ);
+          cam_to_object = surface_tf * surface_to_object;
 
-            // define bounding box size and position
-            BoundingBox bb;
-            bb.x = cam_to_object.getOrigin().getX();
-            bb.y = cam_to_object.getOrigin().getY();
-            bb.z = cam_to_object.getOrigin().getZ();
-            bb.width = 0.15;
-            bb.height = 0.3;
-            bb.depth = 0.3;
+          // define bounding box size and position
+          BoundingBox bb;
+          bb.x = cam_to_object.getOrigin().getX();
+          bb.y = cam_to_object.getOrigin().getY();
+          bb.z = cam_to_object.getOrigin().getZ();
+          bb.width = 0.15;
+          bb.height = 0.3;
+          bb.depth = 0.3;
 
-            // extract object image from full image
-            object_msg.image = cutoutImage(&object_image, bb, cloud);
-            // add SegmentedObject message to SegmentedObjectArray
-            objects.objects.push_back(object_msg);
-            objects.count++;
-        }
-        catch (std::runtime_error)
-        {
-            ROS_ERROR("Unable to extract object image from cloud!");
-        }
+          // extract object image from full image
+          object_msg.image = cutoutImage(&object_image, bb, cloud);
+          // add SegmentedObject message to SegmentedObjectArray
+          objects.objects.push_back(object_msg);
+          objects.count++;
+      }
+      catch (std::runtime_error)
+      {
+          ROS_ERROR("Unable to extract object image from cloud!");
       }
     }
 
