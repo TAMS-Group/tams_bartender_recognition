@@ -20,6 +20,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 import pickle
+import os
 
 def prepare_vgg(output_dim):
     vgg_model = applications.VGG16(weights='imagenet', include_top=False, input_shape=(96, 96, 3))
@@ -181,7 +182,9 @@ def init_label_classifier(object_group, version):
         labels_dir = str.format("{}/labels/{}/", package_dir, object_group)
         classifier, labels = get_model(labels_dir)
         classifier._make_predict_function()
-        classifier.save(model_file)
+        if not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+            classifier.save(model_file)
         lf = open(labels_file, 'wb')
         pickle.dump(sorted(labels), lf)
         lf.close()
