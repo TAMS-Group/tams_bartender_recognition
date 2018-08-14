@@ -100,7 +100,7 @@ def prepare_classifier2(output_dim):
 
 
 def get_model(labels_dir):
-    labels = sorted([d.split("/")[1] for d in glob.glob(labels_dir+'labels_test/*')])
+    labels = sorted([d.split("/")[-1] for d in glob.glob(labels_dir+'labels_test/*')])
     classifier = prepare_classifier2(len(labels))
     # Initialising the CN    # Part 2 - Fitting the CNN to the images
     from keras.preprocessing.image import ImageDataGenerator
@@ -184,7 +184,7 @@ def init_label_classifier(object_group, version):
         classifier._make_predict_function()
         if not os.path.exists(model_dir):
             os.makedirs(model_dir)
-            classifier.save(model_file)
+        classifier.save(model_file)
         lf = open(labels_file, 'wb')
         pickle.dump(sorted(labels), lf)
         lf.close()
