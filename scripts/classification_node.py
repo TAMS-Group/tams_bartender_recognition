@@ -20,6 +20,7 @@ from classifier import label_classifier
 
 # messages
 from pcl_object_recognition.msg import SegmentedObjectArray
+from pcl_object_recognition.msg import RecognizedObject
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose, Quaternion
 
@@ -97,8 +98,16 @@ def consume_candidate(candidate):
                     obj_height = 0.12 if label.startswith('glass') else 0.28
                     transl = (p.x, p.y, 0.5*obj_height)
                     orient = (o.x, o.y, o.z, o.w)
-                    br.sendTransform(transl, orient, rospy.Time.now(), label, "/surface")
+                    br.sendTransform(transl, orient, rospy.Time.now(), label, surface)
                     publish_markers(i, label, 1)
+
+                    ro = RecognizedObject()
+                    ro.id = label
+                    ro.pose.pose.position = p
+                    ro.pose.pose.orientation = o
+                    ro.pose.pose.position.z = 0.5*obj_height
+                    ro.pose.header.frame_id = surface
+                    publish_recognized_objects(ro)
 
 
 def find_match(matching, candidates, i):
@@ -182,6 +191,10 @@ def publish_text_marker(marker_id, label, duration, z_pos):
     text_marker.lifetime = rospy.Duration(duration)
     marker_text_pub.publish(text_marker)
 
+def publish_recognized_objects(ro)
+    global recognized_object_pub
+    recognized_object_pub.publish(ro)
+
 def init_text_marker():
     global text_marker
     text_marker.action = Marker.ADD
@@ -248,7 +261,7 @@ def interpolate(p1, p2, fraction):
 
 # main function
 if __name__=="__main__":
-    global q, marker_pub, marker_text_pub, labels, br
+    global q, marker_pub, marker_text_pub, recognized_object_pub, labels, br, surface_frame 
 
     q = deque([])
 
@@ -259,6 +272,7 @@ if __name__=="__main__":
     br = tf.TransformBroadcaster()
     object_group = rospy.get_param("~object_group")
     version = rospy.get_param("~version")
+    surface_frame = rospy.get_param("~surface_frame", "/surface")
 
     # load classifier
     classifier = label_classifier(object_group, version)
@@ -273,6 +287,7 @@ if __name__=="__main__":
 
     marker_pub = rospy.Publisher("/object_markers", Marker, queue_size=1)
     marker_text_pub = rospy.Publisher("/object_label_markers", Marker, queue_size=1)
+    recognized_object_pub = rospy.Publisher("/object_poses", RecognizedObject, queue_size=1)
 
 
 

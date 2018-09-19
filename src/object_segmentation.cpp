@@ -42,6 +42,8 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud2.h>
 
+#include <std_srvs/SetBool.h>
+
 #include <pcl_object_recognition/SegmentedObject.h>
 #include <pcl_object_recognition/SegmentedObjectArray.h>
 
@@ -56,9 +58,11 @@ struct BoundingBox {
 
 
 ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub, object_image_pub;
+ros::ServiceServer switch_service;
 std::string surface_frame = "/surface";
 bool has_surface_transform = false;
 bool has_cylinder_transform = false;
+bool enabled = false;
 tf::Transform surface_tf;
 tf::Transform cyl_tf;
 
@@ -378,8 +382,18 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
 	clusters_pub.publish (outcloud);
 }
 
+bool switch_cb(std_srvs::SetBool::Request  &req,
+               std_srvs::SetBool::Response &res)
+{
+  enabled = req.data;
+  res.success = true;
+  return true;
+}
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
+    if(!enabled)
+      return;
+
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
@@ -542,6 +556,8 @@ int main (int argc, char** argv)
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
     objects_pub = nh.advertise<pcl_object_recognition::SegmentedObjectArray>("/segmented_objects", 1);
     object_image_pub = nh.advertise<sensor_msgs::Image>("/object_image", 1);
+
+    switch_service = nh.advertiseService("object_segmentation_switch", switch_cb);
 
     // Spin
     ros::spin();

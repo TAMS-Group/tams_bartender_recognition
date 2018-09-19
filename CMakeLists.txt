@@ -15,12 +15,14 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   tf_conversions
   visualization_msgs
+  tiago_bartender_msgs
 )
 
 add_message_files(
 	FILES
 	SegmentedObject.msg
 	SegmentedObjectArray.msg
+        RecognizedObject.msg
 	)
 
 generate_messages(
@@ -43,3 +45,7 @@ include_directories(
 add_executable(object_segmentation src/object_segmentation.cpp)
 target_link_libraries(object_segmentation ${catkin_LIBRARIES})
 add_dependencies(object_segmentation ${${PROJECT_NAME}_EXPORTED_TARGETS})
+
+add_executable(bottle_recognition_action src/bottle_recognition_action.cpp)
+target_link_libraries(bottle_recognition_action ${catkin_LIBRARIES})
+add_dependencies(bottle_recognition_action ${${PROJECT_NAME}_EXPORTED_TARGETS})
