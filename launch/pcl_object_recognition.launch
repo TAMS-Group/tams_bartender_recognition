@@ -1,9 +1,13 @@
 <?xml version="1.0"?>
 <launch>
+	<arg name="always_enabled" default="false"/>
+
 	<node pkg='pcl_object_recognition' type='classification_node.py' name='object_classification' output='screen'>
-		<param name="object_group" value="default" />
-		<param name="version" value="3"/>
+		<param name="object_group" value="bottles_small" />
+		<param name="version" value="1"/>
 	</node>
 
-	<node pkg='pcl_object_recognition' type='object_segmentation' name='object_segmentation' output='screen'/>
+	<node pkg='pcl_object_recognition' type='object_segmentation' name='object_segmentation' output='screen'>
+		<param name="enabled" value="$(arg always_enabled)"/>
+	</node>
 </launch>

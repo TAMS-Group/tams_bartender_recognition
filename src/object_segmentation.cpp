@@ -546,6 +546,7 @@ int main (int argc, char** argv)
     // Initialize ROS
     ros::init (argc, argv, "pcl_object_recognition");
     ros::NodeHandle nh;
+    ros::NodeHandle pnh("~");
 
     // Create a ROS subscriber for the input point cloud
     ros::Subscriber sub = nh.subscribe ("/camera/depth_registered/points", 1, callback);
@@ -558,6 +559,7 @@ int main (int argc, char** argv)
     object_image_pub = nh.advertise<sensor_msgs::Image>("/object_image", 1);
 
     switch_service = nh.advertiseService("object_segmentation_switch", switch_cb);
+    enabled = pnh.param("enabled", false);
 
     // Spin
     ros::spin();

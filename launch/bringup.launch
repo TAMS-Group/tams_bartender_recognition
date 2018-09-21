@@ -7,6 +7,10 @@
 		args="-d $(find pcl_object_recognition)/launch/demo.rviz" output="screen"/>
 
 	<include file="$(find pcl_object_recognition)/launch/pcl_object_recognition.launch">
-		<arg name="always_enabled" value="true"/>
+		<arg name="always_enabled" value="false"/>
 	</include>
+
+	<node pkg='pcl_object_recognition' type='bottle_recognition_action' name='bottle_recognition_action' output='screen'/>
+
+
 </launch>

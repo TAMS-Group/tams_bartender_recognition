@@ -54,7 +54,7 @@ def distanceOf(pose1, pose2):
     return np.linalg.norm([p1.x - p2.x, p1.y - p2.y, p1.z - p2.z])
 
 def consume_candidate(candidate):
-    global labels, candidates, br
+    global labels, candidates, br, surface_frame
     prediction = make_prediction(candidate)
     pose = candidate.pose.pose
     if prediction is not None:
@@ -98,7 +98,7 @@ def consume_candidate(candidate):
                     obj_height = 0.12 if label.startswith('glass') else 0.28
                     transl = (p.x, p.y, 0.5*obj_height)
                     orient = (o.x, o.y, o.z, o.w)
-                    br.sendTransform(transl, orient, rospy.Time.now(), label, surface)
+                    br.sendTransform(transl, orient, rospy.Time.now(), label, surface_frame)
                     publish_markers(i, label, 1)
 
                     ro = RecognizedObject()
@@ -106,7 +106,7 @@ def consume_candidate(candidate):
                     ro.pose.pose.position = p
                     ro.pose.pose.orientation = o
                     ro.pose.pose.position.z = 0.5*obj_height
-                    ro.pose.header.frame_id = surface
+                    ro.pose.header.frame_id = surface_frame
                     publish_recognized_objects(ro)
 
 
@@ -191,7 +191,7 @@ def publish_text_marker(marker_id, label, duration, z_pos):
     text_marker.lifetime = rospy.Duration(duration)
     marker_text_pub.publish(text_marker)
 
-def publish_recognized_objects(ro)
+def publish_recognized_objects(ro):
     global recognized_object_pub
     recognized_object_pub.publish(ro)
 
