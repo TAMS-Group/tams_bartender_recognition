@@ -548,8 +548,10 @@ int main (int argc, char** argv)
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");
 
+    std::string point_cloud_topic = pnh.param<std::string>("point_cloud_topic", "/camera/depth_registered/points");
+
     // Create a ROS subscriber for the input point cloud
-    ros::Subscriber sub = nh.subscribe ("/camera/depth_registered/points", 1, callback);
+    ros::Subscriber sub = nh.subscribe (point_cloud_topic, 1, callback);
 
     // Create a ROS publisher for the output point cloud
     surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
