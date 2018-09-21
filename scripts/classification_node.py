@@ -93,13 +93,14 @@ def consume_candidate(candidate):
             if match is not None and match[1] > 0.8:
                 (pose, pred, time, count) = candidates[match[0]]
                 if(count > 2):
+                    obj_height = 0.12 if label.startswith('glass') else 0.28
+                    pose.position.z = 0.5*obj_height
                     p = pose.position
                     o = pose.orientation
-                    obj_height = 0.12 if label.startswith('glass') else 0.28
-                    transl = (p.x, p.y, 0.5*obj_height)
+                    transl = (p.x, p.y, p.z)
                     orient = (o.x, o.y, o.z, o.w)
-                    br.sendTransform(transl, orient, rospy.Time.now(), label, surface_frame)
-                    publish_markers(i, label, 1)
+                    #br.sendTransform(transl, orient, rospy.Time.now(), label, surface_frame)
+                    publish_markers(i, label, surface_frame, pose, 1)
 
                     ro = RecognizedObject()
                     ro.id = label
@@ -168,25 +169,27 @@ def find_match(matching, candidates, i):
 #
 #        publish_markers(bottle_id, label, duration)
 
-def publish_markers(marker_id, label, duration):
-    publish_object_marker(marker_id, label, duration)
-    publish_text_marker(marker_id + 100, label, duration, 0.12 if label.startswith('glass') else 0.28)
+def publish_markers(marker_id, label, frame, pose, duration):
+    publish_object_marker(marker_id, label, frame, pose, duration)
+    publish_text_marker(marker_id + 100, label, frame, pose, duration, 0.12 if label.startswith('glass') else 0.28)
 
-def publish_object_marker(marker_id, label, duration):
+def publish_object_marker(marker_id, label, frame, pose, duration):
     global glass_marker, bottle_marker, marker_pub
     marker = glass_marker if label.startswith('glass') else bottle_marker
     marker.id = marker_id
-    marker.header.frame_id = label
+    marker.header.frame_id = frame
     marker.header.stamp = rospy.Time.now()
+    marker.pose = pose
     marker.lifetime = rospy.Duration(duration)
     marker_pub.publish(marker)
 
-def publish_text_marker(marker_id, label, duration, z_pos):
+def publish_text_marker(marker_id, label, frame, pose, duration, z_pos):
     global marker_text_pub, text_marker
     text_marker.id = 100 + marker_id
     text_marker.header.stamp = rospy.Time.now()
-    text_marker.header.frame_id = label
+    text_marker.header.frame_id = frame
     text_marker.text = label
+    text_marker.pose = pose
     text_marker.pose.position.z = z_pos 
     text_marker.lifetime = rospy.Duration(duration)
     marker_text_pub.publish(text_marker)
