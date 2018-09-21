@@ -3,8 +3,9 @@
 	<include file="$(find astra_launch)/launch/astra.launch"/>
 
 
-	<node name="$(anon rviz)" pkg="rviz" type="rviz" respawn="false"
+	<!--	<node name="$(anon rviz)" pkg="rviz" type="rviz" respawn="false"
 		args="-d $(find pcl_object_recognition)/launch/demo.rviz" output="screen"/>
+-->
 
 	<include file="$(find pcl_object_recognition)/launch/pcl_object_recognition.launch">
 		<arg name="always_enabled" value="false"/>
