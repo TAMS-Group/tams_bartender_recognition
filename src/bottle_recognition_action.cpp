@@ -105,16 +105,17 @@ class BottleActionServer
 
     bool createCollisionObject(std::string id, geometry_msgs::PoseStamped pose, moveit_msgs::CollisionObject& object) {
       collisionObjectFromResource(object, id, BOTTLE_MESH);
-      object.header.frame_id = pose.header.frame_id;
+      object.header.frame_id = "surface";
       double mesh_height = computeMeshHeight(object.meshes[0]);
+      object.mesh_poses.resize(1);
 
       // bottle center
       object.mesh_poses[0] = pose.pose;
       object.mesh_poses[0].position.z = 0.5 * mesh_height + 0.002;
 
-      // bottle tip
-      object.mesh_poses[1] = pose.pose;
-      object.mesh_poses[1].position.z = mesh_height + 0.002;
+      // // bottle tip
+      // object.mesh_poses[1] = pose.pose;
+      // object.mesh_poses[1].position.z = mesh_height + 0.002;
       return true;
     }
 
