@@ -16,6 +16,7 @@ find_package(catkin REQUIRED COMPONENTS
   tf_conversions
   visualization_msgs
   tiago_bartender_msgs
+  moveit_ros_planning_interface
 )
 
 add_message_files(
