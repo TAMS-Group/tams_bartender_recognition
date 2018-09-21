@@ -2,7 +2,6 @@
 #include <actionlib/server/simple_action_server.h>
 #include <tiago_bartender_msgs/UpdateBottlesAction.h>
 #include <pcl_object_recognition/RecognizedObject.h>
-#include <pcl_object_recognition/RecognizedObjects.h>
 #include <std_srvs/SetBool.h>
 
 class BottleActionServer
@@ -10,13 +9,15 @@ class BottleActionServer
   protected:
     ros::NodeHandle nh_;
     actionlib::SimpleActionServer<tiago_bartender_msgs::UpdateBottlesAction> as_;
+    ros::Subscriber object_pose_sub;
 
     bool recognize_objects_ = false;
+
   public:
     BottleActionServer() : as_(nh_, "bottle_recognition_action", boost::bind(&BottleActionServer::execute_cb, this, _1), false)
   {
     segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
-    ros::Subscriber object_pose_sub = nh_.subscribe("object_pose", 1000, &BottleActionServer::object_pose_cb, this);
+    object_pose_sub = nh_.subscribe("object_poses", 1, &BottleActionServer::object_pose_cb, this);
     as_.start();
   }
 
