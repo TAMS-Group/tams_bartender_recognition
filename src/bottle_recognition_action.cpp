@@ -11,7 +11,9 @@
 #include <geometric_shapes/shape_extents.h>
 
 
-std::string BOTTLE_MESH = "package://pcl_object_recognition/meshes/bottle-binary.stl";
+//std::string BOTTLE_MESH = "package://pcl_object_recognition/meshes/bottle-binary.stl";
+std::string BOTTLE_MESH = "package://pcl_object_recognition/meshes/bottle_small.stl";
+
 std::string GLASS_MESH= "package://pcl_object_recognition/meshes/glass-binary.stl";
 
 
