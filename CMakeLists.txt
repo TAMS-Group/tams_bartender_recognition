@@ -50,8 +50,8 @@ add_dependencies(object_segmentation ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
 add_executable(detect_bottles_action src/detect_bottles_action.cpp)
 target_link_libraries(detect_bottles_action ${catkin_LIBRARIES})
-add_dependencies(detect_bottles_action ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(detect_bottles_action ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_executable(detect_glass_action src/detect_glass_action.cpp)
 target_link_libraries(detect_glass_action ${catkin_LIBRARIES})
-add_dependencies(detect_glass_action ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_dependencies(detect_glass_action ${catkin_EXPORTED_TARGETS})
