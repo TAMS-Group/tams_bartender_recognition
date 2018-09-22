@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 	<arg name="always_enabled" default="false"/>
-	<arg name="point_cloud_topic" default="/xtion/depth_registered/points"/>
+	<arg name="point_cloud_topic" default="/camera/depth_registered/points"/>
 
 	<node pkg='pcl_object_recognition' type='classification_node.py' name='object_classification' output='screen'>
 		<param name="object_group" value="bottles_small" />

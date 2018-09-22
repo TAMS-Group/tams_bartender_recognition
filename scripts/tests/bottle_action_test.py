@@ -11,8 +11,8 @@ if __name__=="__main__":
 
     try:
         #initialize node
-        rospy.init_node("recognize_action_test", anonymous=True)
-        client = actionlib.SimpleActionClient('bottle_recognition_action', DetectBottlesAction)
+        rospy.init_node("detect_bottles_test", anonymous=True)
+        client = actionlib.SimpleActionClient('detect_bottles_action', DetectBottlesAction)
 
         client.wait_for_server()
 

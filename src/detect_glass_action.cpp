@@ -15,7 +15,6 @@
 
 std::string GLASS_MESH= "package://pcl_object_recognition/meshes/glass-binary.stl";
 
-
 class GlassDetectionServer
 {
 
@@ -29,12 +28,12 @@ class GlassDetectionServer
 
 
     // surface and camera frames
-    std::string surface_frame_ = "/surface";
-    std::string camera_frame_ = "/xtion/depth_registered/points"; // TODO: check for correct frame
+    std::string surface_frame_;
+    std::string camera_frame_; // TODO: check for correct frame
 
     // glass and tag ids
-    std::string glass_id_ = "glass";
-    int glass_tag_id_ = 1;
+    std::string glass_id_;
+    int glass_tag_id_;
 
     // tf and tag detection
     tf::Transform tag_transform;
@@ -42,15 +41,12 @@ class GlassDetectionServer
     tf::StampedTransform surface_camera_transform_;
     bool detection_running_ = false;
     bool tag_found_= false;
-    float filter_weight = 0.25;
+    float filter_weight_;
 
-
-  protected:
-
-   void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, double fraction, tf::Transform& t_out){
+    void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, double fraction, tf::Transform& t_out){
       t_out.setOrigin( t1.getOrigin()*(1-fraction) + t2.getOrigin()*fraction );
       t_out.setRotation( t1.getRotation().slerp(t2.getRotation(), fraction) );
-   }
+    }
 
     bool getGlassPose(geometry_msgs::PoseStamped& glass_pose) {
 
@@ -91,10 +87,10 @@ class GlassDetectionServer
             if(msg.detections[i].id[0] == glass_tag_id_) {
               tf::Transform new_tag_transform;
               tf::poseMsgToTF(msg.detections[i].pose.pose.pose, new_tag_transform);
-                
+
               // interpolate new tag with previous
               if(tag_found_)
-                interpolateTransforms(tag_transform, new_tag_transform, filter_weight, new_tag_transform);
+                interpolateTransforms(tag_transform, new_tag_transform, filter_weight_, new_tag_transform);
 
               // save detection and mark tag as found
               tag_transform = new_tag_transform;
@@ -176,6 +172,9 @@ class GlassDetectionServer
           tf::transformTFToEigen(new_transform, next_mat);
           tf::transformTFToEigen(surface_camera_transform_, prev_mat);
           surface_camera_transform_ = new_transform;
+	  success = true;
+
+	  break;
 
           // check if consecutive transforms are approx equal
           if(prev_mat.isApprox(next_mat)) {
@@ -194,6 +193,7 @@ class GlassDetectionServer
       return success;
     }
 
+  protected:
 
     void execute_cb(const tiago_bartender_msgs::DetectGlassGoalConstPtr &goal)
     {
@@ -202,6 +202,7 @@ class GlassDetectionServer
       if(!findStableSurfaceFrame()) {
         ROS_ERROR("Unable to find a stable surface frame!");
         as_.setAborted();
+	return;
       }
 
       // start detection
@@ -240,6 +241,14 @@ class GlassDetectionServer
   {
     segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
     tag_detections_sub_ = nh_.subscribe("tag_detections", 1, &GlassDetectionServer::tagDetectionCallback, this);
+
+    //  load params
+    glass_tag_id_ = pnh.param("glass_tag", 435);
+    glass_id_ = pnh.param("glass_id", "glass");
+    surface_frame_ = pnh.param("surface_frame", "/surface");
+    camera_frame_ = pnh.param("camera_frame", "/camera_rgb_optical_frame");
+    filter_weight_ = pnh.param("glass_pose_filter_weight", 0.25);
+
     as_.start();
   }
 };

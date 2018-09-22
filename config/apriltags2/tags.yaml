@@ -1,0 +1,12 @@
+standalone_tags:
+    [
+    {id: 0, size: 0.161},
+    {id: 42, size: 0.1535},
+    {id: 403, size: 0.19},
+    {id: 404, size: 0.19},
+    {id: 408, size: 0.19},
+    {id: 413, size: 0.19},
+    {id: 410, size: 0.19},
+    {id: 435, size: 0.072}
+    ]
+tag_bundles: []

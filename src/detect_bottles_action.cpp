@@ -19,21 +19,72 @@ std::string GLASS_MESH= "package://pcl_object_recognition/meshes/glass-binary.st
 
 class BottleActionServer
 {
-  protected:
+
+  private:
     ros::NodeHandle nh_;
     actionlib::SimpleActionServer<tiago_bartender_msgs::DetectBottlesAction> as_;
     ros::Subscriber object_pose_sub;
 
-
     bool recognize_objects_ = false;
 
-  public:
-    BottleActionServer() : as_(nh_, "bottle_recognition_action", boost::bind(&BottleActionServer::execute_cb, this, _1), false)
-  {
-    segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
-    object_pose_sub = nh_.subscribe("object_poses", 1, &BottleActionServer::object_pose_cb, this);
-    as_.start();
-  }
+
+
+    void object_pose_cb(const pcl_object_recognition::RecognizedObject::ConstPtr& msg)
+    {
+      ROS_INFO_STREAM("Bottle: " << msg->id);
+
+      if(recognize_objects_) {
+        object_poses_[msg->id] = msg->pose;
+        object_count_[msg->id]++;
+      }
+    }
+
+    std::map<std::string, geometry_msgs::PoseStamped> object_poses_;
+    std::map<std::string, int> object_count_;
+    ros::ServiceClient segmentation_client_;
+
+    bool createCollisionObject(std::string id, geometry_msgs::PoseStamped pose, moveit_msgs::CollisionObject& object) {
+      collisionObjectFromResource(object, id, BOTTLE_MESH);
+      object.header.frame_id = "surface";
+      double mesh_height = computeMeshHeight(object.meshes[0]);
+      object.mesh_poses.resize(1);
+
+      // bottle center
+      object.mesh_poses[0] = pose.pose;
+      object.mesh_poses[0].position.z = 0.5 * mesh_height + 0.002;
+
+      // // bottle tip
+      // object.mesh_poses[1] = pose.pose;
+      // object.mesh_poses[1].position.z = mesh_height + 0.002;
+      return true;
+    }
+
+    void collisionObjectFromResource(moveit_msgs::CollisionObject& msg, const std::string& id, const std::string& resource) {
+      msg.meshes.resize(1);
+
+      // load mesh
+      const Eigen::Vector3d scaling(1, 1, 1);
+      shapes::Shape* shape = shapes::createMeshFromResource(resource, scaling);
+      shapes::ShapeMsg shape_msg;
+      shapes::constructMsgFromShape(shape, shape_msg);
+      msg.meshes[0] = boost::get<shape_msgs::Mesh>(shape_msg);
+
+      // set pose
+      msg.mesh_poses.resize(1);
+      msg.mesh_poses[0].orientation.w = 1.0;
+
+      // fill in details for MoveIt
+      msg.id = id;
+      msg.operation = moveit_msgs::CollisionObject::ADD;
+    }
+
+    double computeMeshHeight(const shape_msgs::Mesh& mesh) {
+      double x,y,z;
+      geometric_shapes::getShapeExtents(mesh, x, y, z);
+      return z;
+    }
+
+  protected:
 
     void execute_cb(const tiago_bartender_msgs::DetectBottlesGoalConstPtr &goal)
     {
@@ -89,67 +140,19 @@ class BottleActionServer
       as_.setSucceeded(result);
     }
 
+  public:
+    BottleActionServer() : as_(nh_, "detect_bottles_action", boost::bind(&BottleActionServer::execute_cb, this, _1), false)
+  {
+    segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
+    object_pose_sub = nh_.subscribe("object_poses", 1, &BottleActionServer::object_pose_cb, this);
+    as_.start();
+  }
 
-  private:
-    void object_pose_cb(const pcl_object_recognition::RecognizedObject::ConstPtr& msg)
-    {
-      ROS_INFO_STREAM("Bottle: " << msg->id);
-
-      if(recognize_objects_) {
-        object_poses_[msg->id] = msg->pose;
-        object_count_[msg->id]++;
-      }
-    }
-
-    std::map<std::string, geometry_msgs::PoseStamped> object_poses_;
-    std::map<std::string, int> object_count_;
-    ros::ServiceClient segmentation_client_;
-
-    bool createCollisionObject(std::string id, geometry_msgs::PoseStamped pose, moveit_msgs::CollisionObject& object) {
-      collisionObjectFromResource(object, id, BOTTLE_MESH);
-      object.header.frame_id = "surface";
-      double mesh_height = computeMeshHeight(object.meshes[0]);
-      object.mesh_poses.resize(1);
-
-      // bottle center
-      object.mesh_poses[0] = pose.pose;
-      object.mesh_poses[0].position.z = 0.5 * mesh_height + 0.002;
-
-      // // bottle tip
-      // object.mesh_poses[1] = pose.pose;
-      // object.mesh_poses[1].position.z = mesh_height + 0.002;
-      return true;
-    }
-
-    void collisionObjectFromResource(moveit_msgs::CollisionObject& msg, const std::string& id, const std::string& resource) {
-      msg.meshes.resize(1);
-
-      // load mesh
-      const Eigen::Vector3d scaling(1, 1, 1);
-      shapes::Shape* shape = shapes::createMeshFromResource(resource, scaling);
-      shapes::ShapeMsg shape_msg;
-      shapes::constructMsgFromShape(shape, shape_msg);
-      msg.meshes[0] = boost::get<shape_msgs::Mesh>(shape_msg);
-
-      // set pose
-      msg.mesh_poses.resize(1);
-      msg.mesh_poses[0].orientation.w = 1.0;
-
-      // fill in details for MoveIt
-      msg.id = id;
-      msg.operation = moveit_msgs::CollisionObject::ADD;
-    }
-
-    double computeMeshHeight(const shape_msgs::Mesh& mesh) {
-      double x,y,z;
-      geometric_shapes::getShapeExtents(mesh, x, y, z);
-      return z;
-    }
 };
 
 int main(int argc, char** argv)
 {
-  ros::init(argc, argv, "bottle_recognition_action");
+  ros::init(argc, argv, "detect_bottles_action");
   ros::AsyncSpinner spinner(2);
   spinner.start();
   BottleActionServer bas;
