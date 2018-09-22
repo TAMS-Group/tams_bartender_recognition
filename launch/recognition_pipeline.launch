@@ -2,6 +2,7 @@
 <launch>
 	<arg name="always_enabled" default="false"/>
 	<arg name="point_cloud_topic" default="/camera/depth_registered/points"/>
+	<arg name="surface_frame" default="/surface"/>
 
 	<node pkg='tams_bartender_recognition' type='classification_node.py' name='object_classification' output='screen'>
 		<param name="object_group" value="bottles_small" />
@@ -11,5 +12,6 @@
 	<node pkg='tams_bartender_recognition' type='object_segmentation' name='object_segmentation' output='screen'>
 		<param name="enabled" value="$(arg always_enabled)"/>
 		<param name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
+		<param name="surface_frame" value="$(arg surface_frame)"/>
 	</node>
 </launch>

@@ -25,8 +25,9 @@ class BottleActionServer
     actionlib::SimpleActionServer<tiago_bartender_msgs::DetectBottlesAction> as_;
     ros::Subscriber object_pose_sub;
 
-    bool recognize_objects_ = false;
+    std::string surface_frame_;
 
+    bool recognize_objects_ = false;
 
 
     void object_pose_cb(const tams_bartender_recognition::RecognizedObject::ConstPtr& msg)
@@ -45,7 +46,7 @@ class BottleActionServer
 
     bool createCollisionObject(std::string id, geometry_msgs::PoseStamped pose, moveit_msgs::CollisionObject& object) {
       collisionObjectFromResource(object, id, BOTTLE_MESH);
-      object.header.frame_id = "surface";
+      object.header.frame_id = surface_frame_;
       double mesh_height = computeMeshHeight(object.meshes[0]);
       object.mesh_poses.resize(1);
 
@@ -143,6 +144,9 @@ class BottleActionServer
   public:
     BottleActionServer() : as_(nh_, "detect_bottles_action", boost::bind(&BottleActionServer::execute_cb, this, _1), false)
   {
+    ros::NodeHandle pnh("~");
+    surface_frame_ = pnh.param<std::string>("surface_frame", "/surface");
+
     segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
     object_pose_sub = nh_.subscribe("object_poses", 1, &BottleActionServer::object_pose_cb, this);
     as_.start();

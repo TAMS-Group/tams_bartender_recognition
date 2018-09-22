@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+	<include file="$(find astra_launch)/launch/astra.launch"/>
+
+	<include file="$(find tams_bartender_recognition)/launch/bringup.launch">
+		<arg name="camera" value="/camera"/>
+		<arg name="camera_rgb" value="/camera/rgb"/>
+		<arg name="image_rect_suffix" value="image_rect_color"/>
+
+		<arg name="point_cloud_topic" value="/camera/depth_registered/points"/>
+		<arg name="camera_frame" value="/camera_rgb_optical_frame"/>
+		<arg name="surface_frame" value="/surface"/>
+	</include>
+</launch>

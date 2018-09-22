@@ -6,7 +6,7 @@
 	<node name="$(anon rviz)" pkg="rviz" type="rviz" respawn="false"
 		args="-d $(find tams_bartender_recognition)/launch/demo.rviz" output="screen"/>
 
-	<include file="$(find tams_bartender_recognition)/launch/tams_bartender_recognition.launch">
+	<include file="$(find tams_bartender_recognition)/launch/recognition_pipeline.launch">
 		<arg name="always_enabled" value="true"/>
 	</include>
 </launch>

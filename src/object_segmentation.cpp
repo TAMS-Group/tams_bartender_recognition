@@ -59,7 +59,7 @@ struct BoundingBox {
 
 ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub, object_image_pub;
 ros::ServiceServer switch_service;
-std::string surface_frame = "/surface";
+std::string surface_frame_;
 bool has_surface_transform = false;
 bool has_cylinder_transform = false;
 bool enabled = false;
@@ -232,7 +232,7 @@ geometry_msgs::Pose getSurfacePoseFromCoefficients(pcl::ModelCoefficients::Ptr p
     return pose;
 }
 
-void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string& cloud_frame, const std::string& surface_frame) {
+void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string& cloud_frame) {
 
     tf::Transform new_tf;
     tf::poseMsgToTF(pose, new_tf);
@@ -241,7 +241,7 @@ void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string&
     }
     surface_tf = new_tf;
     static tf::TransformBroadcaster tf_broadcaster;
-    tf_broadcaster.sendTransform(tf::StampedTransform(surface_tf, ros::Time::now(), cloud_frame, surface_frame));
+    tf_broadcaster.sendTransform(tf::StampedTransform(surface_tf, ros::Time::now(), cloud_frame, surface_frame_));
     has_surface_transform = true;
 }
 
@@ -431,8 +431,8 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     // retrieve pose of surface
     geometry_msgs::Pose surface_pose = getSurfacePoseFromCoefficients(surface_coefs);
 
-    // publish surface pose as surface_frame to /tf
-    publishSurfaceTransform(surface_pose, cloud->header.frame_id, surface_frame);
+    // publish surface pose as surface_frame_ to /tf
+    publishSurfaceTransform(surface_pose, cloud->header.frame_id);
 
     // filter point cloud to region above surface
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -457,7 +457,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     extractClusters(surfaceVoxels, cluster_indices);
 
     tams_bartender_recognition::SegmentedObjectArray objects;
-    objects.header.frame_id = surface_frame;
+    objects.header.frame_id = surface_frame_;
     objects.header.stamp = ros::Time::now();
 
     for(const pcl::PointIndices cluster : cluster_indices) {
@@ -497,7 +497,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
       surface_to_object.setOrigin(objectXYZ);
 
       // create pose stamped in surface frame
-      object_msg.pose.header.frame_id = surface_frame;
+      object_msg.pose.header.frame_id = surface_frame_;
       tf::poseTFToMsg(surface_to_object, object_msg.pose.pose);
 
       // Try to extract a 2d image of the object
@@ -555,6 +555,7 @@ int main (int argc, char** argv)
     ros::NodeHandle pnh("~");
 
     std::string point_cloud_topic = pnh.param<std::string>("point_cloud_topic", "/camera/depth_registered/points");
+    surface_frame_ = pnh.param<std::string>("surface_frame", "/surface");
 
     // Create a ROS subscriber for the input point cloud
     ros::Subscriber sub = nh.subscribe (point_cloud_topic, 1, callback);

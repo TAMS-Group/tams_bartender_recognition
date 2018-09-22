@@ -165,8 +165,8 @@ class GlassDetectionServer
       while(ros::Time::now() - start_time < timeout) {
         try {
           tf::StampedTransform new_transform;
-          tf_listener.waitForTransform(surface_frame_, camera_frame_, ros::Time(0), ros::Duration(1.0));
-          tf_listener.lookupTransform(surface_frame_, camera_frame_, ros::Time(0), new_transform);
+          tf_listener.waitForTransform(camera_frame_, surface_frame_, ros::Time(0), ros::Duration(1.0));
+          tf_listener.lookupTransform(camera_frame_, surface_frame_, ros::Time(0), new_transform);
           Eigen::Affine3d prev_mat;
           Eigen::Affine3d next_mat;
           tf::transformTFToEigen(new_transform, next_mat);
