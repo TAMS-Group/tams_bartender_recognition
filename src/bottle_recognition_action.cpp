@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 #include <actionlib/server/simple_action_server.h>
-#include <tiago_bartender_msgs/UpdateBottlesAction.h>
+#include <tiago_bartender_msgs/DetectBottlesAction.h>
 #include <pcl_object_recognition/RecognizedObject.h>
 #include <std_srvs/SetBool.h>
 
@@ -21,7 +21,7 @@ class BottleActionServer
 {
   protected:
     ros::NodeHandle nh_;
-    actionlib::SimpleActionServer<tiago_bartender_msgs::UpdateBottlesAction> as_;
+    actionlib::SimpleActionServer<tiago_bartender_msgs::DetectBottlesAction> as_;
     ros::Subscriber object_pose_sub;
 
 
@@ -35,7 +35,7 @@ class BottleActionServer
     as_.start();
   }
 
-    void execute_cb(const tiago_bartender_msgs::UpdateBottlesGoalConstPtr &goal)
+    void execute_cb(const tiago_bartender_msgs::DetectBottlesGoalConstPtr &goal)
     {
       std_srvs::SetBool srv;
       srv.request.data = true;
@@ -69,7 +69,7 @@ class BottleActionServer
       }
 
 
-      tiago_bartender_msgs::UpdateBottlesResult result;
+      tiago_bartender_msgs::DetectBottlesResult result;
       std::vector<moveit_msgs::CollisionObject> objs;
       for (std::map<std::string,int>::iterator it=object_count_.begin(); it!=object_count_.end(); ++it) {
         std::string id = it->first;
@@ -78,7 +78,7 @@ class BottleActionServer
           if(createCollisionObject(id, object_poses_[id], object)) {
             objs.push_back(object);
           }
-          result.updated_bottles.push_back(id);
+          result.detected_bottles.push_back(id);
         }
       }
 
