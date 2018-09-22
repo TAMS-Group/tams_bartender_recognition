@@ -1,7 +1,7 @@
 #include <ros/ros.h>
 #include <actionlib/server/simple_action_server.h>
 #include <tiago_bartender_msgs/DetectBottlesAction.h>
-#include <pcl_object_recognition/RecognizedObject.h>
+#include <tams_bartender_recognition/RecognizedObject.h>
 #include <std_srvs/SetBool.h>
 
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
@@ -11,10 +11,10 @@
 #include <geometric_shapes/shape_extents.h>
 
 
-//std::string BOTTLE_MESH = "package://pcl_object_recognition/meshes/bottle-binary.stl";
-std::string BOTTLE_MESH = "package://pcl_object_recognition/meshes/bottle_small.stl";
+//std::string BOTTLE_MESH = "package://tams_bartender_recognition/meshes/bottle-binary.stl";
+std::string BOTTLE_MESH = "package://tams_bartender_recognition/meshes/bottle_small.stl";
 
-std::string GLASS_MESH= "package://pcl_object_recognition/meshes/glass-binary.stl";
+std::string GLASS_MESH= "package://tams_bartender_recognition/meshes/glass-binary.stl";
 
 
 class BottleActionServer
@@ -29,7 +29,7 @@ class BottleActionServer
 
 
 
-    void object_pose_cb(const pcl_object_recognition::RecognizedObject::ConstPtr& msg)
+    void object_pose_cb(const tams_bartender_recognition::RecognizedObject::ConstPtr& msg)
     {
       ROS_INFO_STREAM("Bottle: " << msg->id);
 

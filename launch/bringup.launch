@@ -3,22 +3,22 @@
 	<include file="$(find astra_launch)/launch/astra.launch"/>
 
 	<!--	<node name="$(anon rviz)" pkg="rviz" type="rviz" respawn="false"
-		args="-d $(find pcl_object_recognition)/launch/demo.rviz" output="screen"/>
+		args="-d $(find tams_bartender_recognition)/launch/demo.rviz" output="screen"/>
 -->
 
-	<include file="$(find pcl_object_recognition)/launch/pcl_object_recognition.launch">
+	<include file="$(find tams_bartender_recognition)/launch/tams_bartender_recognition.launch">
 		<arg name="always_enabled" value="false"/>
 	</include>
 
-	<node pkg='pcl_object_recognition' type='detect_bottles_action' name='detect_bottles_action' output='screen'/>
+	<node pkg='tams_bartender_recognition' type='detect_bottles_action' name='detect_bottles_action' output='screen'/>
 
-	<node pkg='pcl_object_recognition' type='detect_glass_action' name='detect_glass_action' output='screen'>
+	<node pkg='tams_bartender_recognition' type='detect_glass_action' name='detect_glass_action' output='screen'>
 		<param name="glass_tag" value="435"/>
 		<param name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
 
 	</node>
 
-	<include file="$(find pcl_object_recognition)/launch/apriltags2.launch"/>
+	<include file="$(find tams_bartender_recognition)/launch/apriltags2.launch"/>
 	<!--
 		<arg name="camera" value="camera"/>
 		<arg name="camera_frame" value="camera_rgb_optical_frame"/>

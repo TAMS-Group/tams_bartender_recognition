@@ -2,9 +2,9 @@
 <launch>
 	<include file="$(find astra_launch)/launch/astra.launch"/>
 
-	<node pkg="pcl_object_recognition" type="object_segmentation" name="object_segmentation"/>
+	<node pkg="tams_bartender_recognition" type="object_segmentation" name="object_segmentation"/>
 
-	<!-- node pkg="pcl_object_recognition" type="sample_collector.py" name="sample_collector"/ -->
+	<!-- node pkg="tams_bartender_recognition" type="sample_collector.py" name="sample_collector"/ -->
 
 	<node pkg="image_view" type="image_view" name="segmented_object" respawn="false">
 		<remap from="image" to="object_image"/>

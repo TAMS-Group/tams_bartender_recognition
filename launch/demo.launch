@@ -4,9 +4,9 @@
 
 
 	<node name="$(anon rviz)" pkg="rviz" type="rviz" respawn="false"
-		args="-d $(find pcl_object_recognition)/launch/demo.rviz" output="screen"/>
+		args="-d $(find tams_bartender_recognition)/launch/demo.rviz" output="screen"/>
 
-	<include file="$(find pcl_object_recognition)/launch/pcl_object_recognition.launch">
+	<include file="$(find tams_bartender_recognition)/launch/tams_bartender_recognition.launch">
 		<arg name="always_enabled" value="true"/>
 	</include>
 </launch>

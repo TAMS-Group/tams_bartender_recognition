@@ -163,7 +163,7 @@ class label_classifier:
 
 def init_label_classifier(object_group, version):
     rospack = rospkg.RosPack()
-    package_dir = rospack.get_path('pcl_object_recognition')
+    package_dir = rospack.get_path('tams_bartender_recognition')
 
     # check for existing model
     model_dir = str.format("{}/models/{}/", package_dir, object_group)

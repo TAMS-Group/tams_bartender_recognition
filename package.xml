@@ -1,8 +1,8 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>pcl_object_recognition</name>
+  <name>tams_bartender_recognition</name>
   <version>0.0.0</version>
-  <description>The pcl_object_recognition package</description>
+  <description>The tams_bartender_recognition package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
   <!-- Example:  -->

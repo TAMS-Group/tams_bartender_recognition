@@ -44,8 +44,8 @@
 
 #include <std_srvs/SetBool.h>
 
-#include <pcl_object_recognition/SegmentedObject.h>
-#include <pcl_object_recognition/SegmentedObjectArray.h>
+#include <tams_bartender_recognition/SegmentedObject.h>
+#include <tams_bartender_recognition/SegmentedObjectArray.h>
 
 struct BoundingBox {
     float x;
@@ -456,7 +456,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     std::vector<pcl::PointIndices> cluster_indices;
     extractClusters(surfaceVoxels, cluster_indices);
 
-    pcl_object_recognition::SegmentedObjectArray objects;
+    tams_bartender_recognition::SegmentedObjectArray objects;
     objects.header.frame_id = surface_frame;
     objects.header.stamp = ros::Time::now();
 
@@ -478,7 +478,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
         continue;
       }
 
-      pcl_object_recognition::SegmentedObject object_msg;
+      tams_bartender_recognition::SegmentedObject object_msg;
 
       // basic object parameters
       double x = cyl_coefs->values[0];
@@ -550,7 +550,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 int main (int argc, char** argv)
 {
     // Initialize ROS
-    ros::init (argc, argv, "pcl_object_recognition");
+    ros::init (argc, argv, "tams_bartender_recognition");
     ros::NodeHandle nh;
     ros::NodeHandle pnh("~");
 
@@ -563,7 +563,7 @@ int main (int argc, char** argv)
     surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
     clusters_pub = nh.advertise<sensor_msgs::PointCloud2> ("/extracted_clusters", 1);
     cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
-    objects_pub = nh.advertise<pcl_object_recognition::SegmentedObjectArray>("/segmented_objects", 1);
+    objects_pub = nh.advertise<tams_bartender_recognition::SegmentedObjectArray>("/segmented_objects", 1);
     object_image_pub = nh.advertise<sensor_msgs::Image>("/object_image", 1);
 
     switch_service = nh.advertiseService("object_segmentation_switch", switch_cb);

@@ -8,7 +8,7 @@ import os.path
 import rospy
 
 # ROS messages
-from pcl_object_recognition.msg import SegmentedObjectArray, SegmentedObject
+from tams_bartender_recognition.msg import SegmentedObjectArray, SegmentedObject
 from sensor_msgs.msg import Image
 
 # OpenCV

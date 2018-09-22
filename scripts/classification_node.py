@@ -19,14 +19,14 @@ import tf
 from classifier import label_classifier
 
 # messages
-from pcl_object_recognition.msg import SegmentedObjectArray
-from pcl_object_recognition.msg import RecognizedObject
+from tams_bartender_recognition.msg import SegmentedObjectArray
+from tams_bartender_recognition.msg import RecognizedObject
 from visualization_msgs.msg import Marker
 from geometry_msgs.msg import Pose, Quaternion
 
 
-bottle_mesh_uri = "package://pcl_object_recognition/meshes/bottle-binary.stl"
-glass_mesh_uri = "package://pcl_object_recognition/meshes/glass-binary.stl"
+bottle_mesh_uri = "package://tams_bartender_recognition/meshes/bottle-binary.stl"
+glass_mesh_uri = "package://tams_bartender_recognition/meshes/glass-binary.stl"
 
 bottle_mesh = "../meshes/bottle.stl"
 scene = moveit_commander.PlanningSceneInterface()

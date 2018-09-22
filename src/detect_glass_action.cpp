@@ -13,7 +13,7 @@
 #include <tf_conversions/tf_eigen.h>
 #include <apriltags2_ros/AprilTagDetectionArray.h>
 
-std::string GLASS_MESH= "package://pcl_object_recognition/meshes/glass-binary.stl";
+std::string GLASS_MESH= "package://tams_bartender_recognition/meshes/glass-binary.stl";
 
 class GlassDetectionServer
 {
