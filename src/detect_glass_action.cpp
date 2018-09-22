@@ -242,11 +242,13 @@ class GlassDetectionServer
     segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
     tag_detections_sub_ = nh_.subscribe("tag_detections", 1, &GlassDetectionServer::tagDetectionCallback, this);
 
+    ros::NodeHandle pnh("~");
+
     //  load params
     glass_tag_id_ = pnh.param("glass_tag", 435);
-    glass_id_ = pnh.param("glass_id", "glass");
-    surface_frame_ = pnh.param("surface_frame", "/surface");
-    camera_frame_ = pnh.param("camera_frame", "/camera_rgb_optical_frame");
+    glass_id_ = pnh.param<std::string>("glass_id", "glass");
+    surface_frame_ = pnh.param<std::string>("surface_frame", "/surface");
+    camera_frame_ = pnh.param<std::string>("camera_frame", "/camera_rgb_optical_frame");
     filter_weight_ = pnh.param("glass_pose_filter_weight", 0.25);
 
     as_.start();
