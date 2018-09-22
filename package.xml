@@ -17,6 +17,7 @@
 
   <buildtool_depend>catkin</buildtool_depend>
   <buildtool_depend>genmsg</buildtool_depend>
+  <build_depend>apriltags2_ros</build_depend>
   <build_depend>pcl_conversions</build_depend>
   <build_depend>tf</build_depend>
   <build_depend>tf_conversions</build_depend>
@@ -29,6 +30,7 @@
   <build_depend>message_generation</build_depend>
   <build_depend>tiago_bartender_msgs</build_depend>
   <build_depend>moveit_ros_planning_interface</build_depend>
+  <exec_depend>apriltags2_ros</exec_depend>
   <exec_depend>pcl_conversions</exec_depend>
   <exec_depend>tf</exec_depend>
   <exec_depend>tf_conversions</exec_depend>

@@ -5,6 +5,7 @@ add_compile_options(-std=c++11)
 
 find_package(catkin REQUIRED COMPONENTS
   tf
+  apriltags2_ros
   genmsg
   pcl_conversions
   pcl_ros
@@ -47,6 +48,10 @@ add_executable(object_segmentation src/object_segmentation.cpp)
 target_link_libraries(object_segmentation ${catkin_LIBRARIES})
 add_dependencies(object_segmentation ${${PROJECT_NAME}_EXPORTED_TARGETS})
 
-add_executable(bottle_recognition_action src/bottle_recognition_action.cpp)
-target_link_libraries(bottle_recognition_action ${catkin_LIBRARIES})
-add_dependencies(bottle_recognition_action ${${PROJECT_NAME}_EXPORTED_TARGETS})
+add_executable(detect_bottles_action src/detect_bottles_action.cpp)
+target_link_libraries(detect_bottles_action ${catkin_LIBRARIES})
+add_dependencies(detect_bottles_action ${${PROJECT_NAME}_EXPORTED_TARGETS})
+
+add_executable(detect_glass_action src/detect_glass_action.cpp)
+target_link_libraries(detect_glass_action ${catkin_LIBRARIES})
+add_dependencies(detect_glass_action ${${PROJECT_NAME}_EXPORTED_TARGETS})

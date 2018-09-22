@@ -11,7 +11,7 @@
 		<arg name="always_enabled" value="false"/>
 	</include>
 
-	<node pkg='pcl_object_recognition' type='bottle_recognition_action' name='bottle_recognition_action' output='screen'/>
+	<node pkg='pcl_object_recognition' type='detect_bottles_action' name='detect_bottles_action' output='screen'/>
 
 
 </launch>

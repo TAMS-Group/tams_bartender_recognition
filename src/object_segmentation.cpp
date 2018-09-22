@@ -385,6 +385,12 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
 bool switch_cb(std_srvs::SetBool::Request  &req,
                std_srvs::SetBool::Response &res)
 {
+  // ignore if switch is already set to requested value
+  if (enabled == req.data) {
+    ROS_WARN("Service call ignored - Object Segmentation is already switched to requested state!");
+    return false;
+  }
+
   enabled = req.data;
   res.success = true;
   return true;
