@@ -465,9 +465,14 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
       pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
       pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
       pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
+
       for (int i : cluster.indices) {
         cluster_cloud->points.push_back (surfaceVoxels->points[i]);
       }
+
+      if(cluster_cloud->points.size() == 0)
+        break;
+
       cluster_cloud->width = cluster_cloud->points.size();
       cluster_cloud->height = 1;
       cluster_cloud->is_dense = true;
