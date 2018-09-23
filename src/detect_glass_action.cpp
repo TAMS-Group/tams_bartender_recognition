@@ -34,6 +34,8 @@ class GlassDetectionServer
     // glass and tag ids
     std::string glass_id_;
     int glass_tag_id_;
+    double offset_x_;
+    double offset_y_;
 
     // tf and tag detection
     tf::Transform tag_transform;
@@ -63,8 +65,9 @@ class GlassDetectionServer
       tf::poseTFToMsg(surface_tag_transform, glass_pose.pose);
       glass_pose.header.frame_id = surface_frame_;
       // offset between tag and glass
-      glass_pose.pose.position.x += 0.1;
-      // upright orientation
+      glass_pose.pose.position.x += offset_x_;
+      glass_pose.pose.position.x += offset_y_;
+      //// upright orientation
       glass_pose.pose.orientation.x = 0.0;
       glass_pose.pose.orientation.y = 0.0;
       glass_pose.pose.orientation.z = 0.0;
@@ -88,7 +91,7 @@ class GlassDetectionServer
               tf::Transform new_tag_transform;
               tf::poseMsgToTF(msg.detections[i].pose.pose.pose, new_tag_transform);
 
-              // interpolate new tag with previous
+              //// interpolate new tag with previous
               if(tag_found_)
                 interpolateTransforms(tag_transform, new_tag_transform, filter_weight_, new_tag_transform);
 
@@ -165,16 +168,13 @@ class GlassDetectionServer
       while(ros::Time::now() - start_time < timeout) {
         try {
           tf::StampedTransform new_transform;
-          tf_listener.waitForTransform(camera_frame_, surface_frame_, ros::Time(0), ros::Duration(1.0));
-          tf_listener.lookupTransform(camera_frame_, surface_frame_, ros::Time(0), new_transform);
+          tf_listener.waitForTransform(surface_frame_, camera_frame_, ros::Time(0), ros::Duration(1.0));
+          tf_listener.lookupTransform(surface_frame_, camera_frame_, ros::Time(0), new_transform);
           Eigen::Affine3d prev_mat;
           Eigen::Affine3d next_mat;
           tf::transformTFToEigen(new_transform, next_mat);
           tf::transformTFToEigen(surface_camera_transform_, prev_mat);
           surface_camera_transform_ = new_transform;
-	  success = true;
-
-	  break;
 
           // check if consecutive transforms are approx equal
           if(prev_mat.isApprox(next_mat)) {
@@ -247,6 +247,8 @@ class GlassDetectionServer
     //  load params
     glass_tag_id_ = pnh.param("glass_tag", 435);
     glass_id_ = pnh.param<std::string>("glass_id", "glass");
+    offset_x_ = pnh.param("offset_x", 0.1);
+    offset_y_ = pnh.param("offset_y", 0.0);
     surface_frame_ = pnh.param<std::string>("surface_frame", "/surface");
     camera_frame_ = pnh.param<std::string>("camera_frame", "/camera_rgb_optical_frame");
     filter_weight_ = pnh.param("glass_pose_filter_weight", 0.25);
