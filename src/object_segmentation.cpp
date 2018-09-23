@@ -448,10 +448,13 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     surface_pub.publish (outcloud);
 
 
-    // remove statistical outliers
+    // remove statistical outliers and NaNs
     removeStatisticalOutliers(surfaceVoxels, *surfaceVoxels);
-
     pcl::removeNaNFromPointCloud(*surfaceVoxels, *surfaceVoxels, mapping);
+
+    // leave if cluster is empty
+    if(surfaceVoxels->size() == 0)
+      return;
 
     std::vector<pcl::PointIndices> cluster_indices;
     extractClusters(surfaceVoxels, cluster_indices);
@@ -547,7 +550,6 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     {
       ROS_WARN_STREAM("Did not find any objects. Found " << cluster_indices.size() << " clusters (object candidates).");
     }
-
 }
 
 
