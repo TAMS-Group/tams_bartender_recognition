@@ -10,8 +10,8 @@
 
 	<include file="$(find tams_bartender_recognition)/launch/recognition_pipeline.launch">
 		<arg name="always_enabled" value="false"/>
-		<param name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
-		<param name="surface_frame" value="$(arg surface_frame)"/>
+		<arg name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
+		<arg name="surface_frame" value="$(arg surface_frame)"/>
 	</include>
 
 	<node pkg='tams_bartender_recognition' type='detect_bottles_action' name='detect_bottles_action' output='screen'>
@@ -23,6 +23,10 @@
 		<param name="glass_id" value="glass"/>
 		<param name="surface_frame" value="$(arg surface_frame)"/>
 		<param name="camera_frame" value="$(arg camera_frame)"/>
+
+		<!-- glass x/y offset from april tag -->
+		<param name="offset_x" value="0.1"/>
+		<param name="offset_y" value="0.0"/>
 	</node>
 
 	<include file="$(find tams_bartender_recognition)/launch/apriltags2.launch">
