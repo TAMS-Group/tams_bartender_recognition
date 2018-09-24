@@ -24,6 +24,6 @@
 
 		<arg name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
 		<arg name="camera_frame" value="$(arg rgb_frame)"/>
-		<arg name="surface_frame" value="/surface"/>
+		<arg name="surface_frame" value="surface"/>
 	</include>
 </launch>

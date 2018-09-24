@@ -1,12 +1,12 @@
 <?xml version="1.0"?>
 <launch>
-	<arg name="camera" default="/xtion"/>
+	<arg name="camera" default="xtion"/>
 	<arg name="camera_rgb" default="$(arg camera)/rgb"/>
-	<arg name="image_rect_suffix" default="image_color_rect"/>
+	<arg name="image_rect_suffix" default="image_rect_color"/>
 
 	<arg name="point_cloud_topic" default="$(arg camera)/depth_registered/points"/>
-	<arg name="camera_frame" default="/camera_rgb_optical_frame"/>
-	<arg name="surface_frame" default="/surface"/>
+	<arg name="camera_frame" default="$(arg camera)_rgb_optical_frame"/>
+	<arg name="surface_frame" default="surface"/>
 
 	<include file="$(find tams_bartender_recognition)/launch/recognition_pipeline.launch">
 		<arg name="always_enabled" value="false"/>
