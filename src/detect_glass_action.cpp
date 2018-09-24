@@ -50,7 +50,8 @@ class GlassDetectionServer
       t_out.setRotation( t1.getRotation().slerp(t2.getRotation(), fraction) );
     }
 
-    bool getGlassPose(geometry_msgs::PoseStamped& glass_pose) {
+    bool setPose(moveit_msgs::CollisionObject& object) {
+      geometry_msgs::Pose glass_pose;
 
       // check if tag was found
       if (!tag_found_) {
@@ -59,19 +60,25 @@ class GlassDetectionServer
       }
 
       // compute transform from surface to tag
-      tf::Transform surface_tag_transform = surface_camera_transform_ * tag_transform;
+      tf::Transform surface_obj_transform = surface_camera_transform_ * tag_transform;
 
       // create glass pose with fixed orientation and defined offset
-      tf::poseTFToMsg(surface_tag_transform, glass_pose.pose);
-      glass_pose.header.frame_id = surface_frame_;
+      tf::poseTFToMsg(surface_obj_transform, glass_pose);
       // offset between tag and glass
-      glass_pose.pose.position.x += offset_x_;
-      glass_pose.pose.position.x += offset_y_;
+      glass_pose.position.x += offset_x_;
+      glass_pose.position.x += offset_y_;
+      double mesh_height = computeMeshHeight(object.meshes[0]);
+      glass_pose.position.z = 0.5 * mesh_height + 0.002;
       //// upright orientation
-      glass_pose.pose.orientation.x = 0.0;
-      glass_pose.pose.orientation.y = 0.0;
-      glass_pose.pose.orientation.z = 0.0;
-      glass_pose.pose.orientation.w = 1.0;
+      glass_pose.orientation.x = 0.0;
+      glass_pose.orientation.y = 0.0;
+      glass_pose.orientation.z = 0.0;
+      glass_pose.orientation.w = 1.0;
+      // create glass pose with fixed orientation and defined offset
+      tf::poseMsgToTF(glass_pose, surface_obj_transform);
+      tf::poseTFToMsg(surface_camera_transform_.inverse() * surface_obj_transform, glass_pose);
+      object.mesh_poses[0] = glass_pose;
+      object.header.frame_id = camera_frame_;
       return true;
     }
 
@@ -215,16 +222,16 @@ class GlassDetectionServer
       // stop detection
       detection_running_ = false;
 
+      // create collision object with mesh
+      moveit_msgs::CollisionObject glass;
+      collisionObjectFromResource(glass, glass_id_, GLASS_MESH);
+
       // retrieve glass pose
       geometry_msgs::PoseStamped glass_pose;
-      if(!getGlassPose(glass_pose)) {
+      if(!setPose(glass)) {
         as_.setAborted();
         return;
       }
-
-      // create collision object with mesh
-      moveit_msgs::CollisionObject glass;
-      createCollisionObject(glass_id_, glass_pose, glass);
 
       // add object to planning scene
       moveit::planning_interface::PlanningSceneInterface psi;
