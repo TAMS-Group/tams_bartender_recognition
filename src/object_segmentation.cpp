@@ -555,7 +555,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     }
     else
     {
-      ROS_WARN_STREAM("Did not find any objects. Found " << cluster_indices.size() << " clusters (object candidates).");
+      ROS_WARN_STREAM_THROTTLE(3, "Did not find any objects. Found " << cluster_indices.size() << " clusters (object candidates).");
     }
 }
 
