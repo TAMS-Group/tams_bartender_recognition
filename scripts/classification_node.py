@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import threading
 
 # opencv
 import cv2
@@ -43,10 +44,13 @@ candidates = []
 
 # receive segmented objects message and put those with images into the queue
 def object_callback(objects):
-    global q
+    global q, cond
+    cond.acquire()
     for i, obj in enumerate(objects.objects):
         if(len(obj.image.data) > 0):
             q.append(obj)
+    cond.notify()
+    cond.release()
 
 def distanceOf(pose1, pose2):
     p1 = pose1.position
@@ -264,7 +268,7 @@ def interpolate(p1, p2, fraction):
 
 # main function
 if __name__=="__main__":
-    global q, marker_pub, marker_text_pub, recognized_object_pub, labels, br, surface_frame 
+    global q, marker_pub, marker_text_pub, recognized_object_pub, labels, br, surface_frame, cond
 
     q = deque([])
 
@@ -292,10 +296,13 @@ if __name__=="__main__":
     marker_text_pub = rospy.Publisher("/object_label_markers", Marker, queue_size=1)
     recognized_object_pub = rospy.Publisher("/object_poses", RecognizedObject, queue_size=1)
 
-
+    cond = threading.Condition()
 
     # handle messages in own thread
     while(not rospy.is_shutdown()):
+        cond.acquire()
+        cond.wait(1.0)
         while(len(q) > 0):
             #consume_bottle(q.popleft())
             consume_candidate(q.popleft())
+        cond.release()
