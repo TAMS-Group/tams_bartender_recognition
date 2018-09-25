@@ -8,6 +8,9 @@
 	<arg name="camera_frame" default="$(arg camera)_rgb_optical_frame"/>
 	<arg name="surface_frame" default="surface"/>
 
+	<arg name="apriltags2_image_forward" value="/apriltags2_image_forward"/>
+	<arg name="apriltags2_camera_info_forward" value="/apriltags2_camera_info_forward"/>
+
 	<include file="$(find tams_bartender_recognition)/launch/recognition_pipeline.launch">
 		<arg name="always_enabled" value="false"/>
 		<arg name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
@@ -19,10 +22,17 @@
 	</node>
 
 	<node pkg='tams_bartender_recognition' type='detect_glass_action' name='detect_glass_action' output='screen'>
+		<!-- apriltag, glass id and camera/surface frames -->
 		<param name="glass_tag" value="435"/>
 		<param name="glass_id" value="glass"/>
 		<param name="surface_frame" value="$(arg surface_frame)"/>
 		<param name="camera_frame" value="$(arg camera_frame)"/>
+
+		<!-- on demand image forward for apriltag detection -->
+		<param name="image_topic" value="$(arg camera_rgb)/$(arg image_rect_suffix)"/>
+		<param name="image_forward_topic" value="$(arg apriltags2_image_forward)"/>
+		<param name="camera_info_topic" value="$(arg camera_rgb)/camera_info"/>
+		<param name="camera_info_forward_topic" value="$(arg apriltags2_camera_info_forward)"/>
 
 		<!-- glass x/y offset from april tag -->
 		<param name="offset_x" value="0.1"/>
@@ -30,8 +40,8 @@
 	</node>
 
 	<include file="$(find tams_bartender_recognition)/launch/apriltags2.launch">
-		<arg name="image_rect" value="$(arg camera_rgb)/$(arg image_rect_suffix)"/>
-		<arg name="camera_info" value="$(arg camera_rgb)/camera_info"/>
+		<arg name="image_rect" value="$(arg apriltags2_image_forward)"/>
+		<arg name="camera_info" value="$(arg apriltags2_camera_info_forward)"/>
 		<arg name="camera_frame" value="$(arg camera_frame)"/>
 	</include>
 </launch>

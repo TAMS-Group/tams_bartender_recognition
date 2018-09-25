@@ -1,9 +1,12 @@
 #include <ros/ros.h>
 #include <actionlib/server/simple_action_server.h>
 #include <tiago_bartender_msgs/DetectGlassAction.h>
-#include <std_srvs/SetBool.h>
 
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+
+#include <std_srvs/SetBool.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/CameraInfo.h>
 
 #include <geometric_shapes/mesh_operations.h>
 #include <geometric_shapes/shape_operations.h>
@@ -22,7 +25,8 @@ class GlassDetectionServer
 
     // ros
     ros::NodeHandle nh_;
-    ros::Subscriber tag_detections_sub_;
+    ros::Subscriber tag_detections_sub_, image_sub_, camera_info_sub_;
+    ros::Publisher image_pub_, camera_info_pub_;
     ros::ServiceClient segmentation_client_;
     actionlib::SimpleActionServer<tiago_bartender_msgs::DetectGlassAction> as_;
 
@@ -202,14 +206,26 @@ class GlassDetectionServer
 
   protected:
 
+    void imageCallback(const sensor_msgs::ImageConstPtr& img)
+    {
+      if(detection_running_)
+        image_pub_.publish(img);
+    }
+
+    void camerainfoCallback(const sensor_msgs::CameraInfoConstPtr& camera_info)
+    {
+      if(detection_running_)
+        camera_info_pub_.publish(camera_info);
+    }
+
+
     void execute_cb(const tiago_bartender_msgs::DetectGlassGoalConstPtr &goal)
     {
-
       // retrieve stable surface frame
       if(!findStableSurfaceFrame()) {
         ROS_ERROR("Unable to find a stable surface frame!");
         as_.setAborted();
-	return;
+        return;
       }
 
       // start detection
@@ -260,6 +276,16 @@ class GlassDetectionServer
     camera_frame_ = pnh.param<std::string>("camera_frame", "/camera_rgb_optical_frame");
     filter_weight_ = pnh.param("glass_pose_filter_weight", 0.25);
 
+    // image forward for april tag detection
+    std::string image_topic = pnh.param<std::string>("image_topic", "/camera/rgb/image_rect_color");
+    std::string image_forward_topic = pnh.param<std::string>("image_forward_topic", "/apriltags2_image_forward");
+    image_sub_ = nh_.subscribe(image_topic, 1, &GlassDetectionServer::imageCallback, this);
+    image_pub_ = nh_.advertise<sensor_msgs::Image>(image_forward_topic, 1);
+
+    std::string camera_info_topic = pnh.param<std::string>("camera_info_topic", "/camera/rgb/camera_info");
+    std::string camera_info_forward_topic = pnh.param<std::string>("camera_info_forward_topic", "/apriltags2_camera_info_forward");
+    camera_info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>(camera_info_forward_topic, 1);
+    camera_info_sub_ = nh_.subscribe(camera_info_topic, 1, &GlassDetectionServer::camerainfoCallback, this);
     as_.start();
   }
 };
