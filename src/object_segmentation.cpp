@@ -419,6 +419,10 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, mapping);
     voxelFilter(cloud_filtered, *voxels);
 
+    // leave if cluster is empty
+    if(voxels->size() == 0)
+      return;
+
     // segment the surface and get coefficients
     pcl::ModelCoefficients::Ptr surface_coefs (new pcl::ModelCoefficients ());
     pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
