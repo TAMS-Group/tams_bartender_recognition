@@ -5,7 +5,7 @@
 	<arg name="surface_frame" default="/surface"/>
 
 	<node pkg='tams_bartender_recognition' type='classification_node.py' name='object_classification' output='log'>
-		<param name="object_group" value="bottles_small" />
+		<param name="object_group" value="tiago_labels" />
 		<param name="version" value="1"/>
 	</node>
 
