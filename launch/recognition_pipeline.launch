@@ -3,6 +3,7 @@
 	<arg name="always_enabled" default="false"/>
 	<arg name="point_cloud_topic" default="/camera/depth_registered/points"/>
 	<arg name="surface_frame" default="/surface"/>
+	<arg name="publish_surface_transform" default="false"/>
 
 	<node pkg='tams_bartender_recognition' type='classification_node.py' name='object_classification' output='log'>
 		<param name="object_group" value="tiago_labels" />
@@ -13,6 +14,6 @@
 		<param name="enabled" value="$(arg always_enabled)"/>
 		<param name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
 		<param name="surface_frame" value="$(arg surface_frame)"/>
-		<param name="publish_surface_transform" value="false"/>
+		<param name="publish_surface_transform" value="$(arg publish_surface_transform)"/>
 	</node>
 </launch>

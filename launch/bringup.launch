@@ -7,6 +7,8 @@
 	<arg name="point_cloud_topic" default="$(arg camera)/depth_registered/points"/>
 	<arg name="camera_frame" default="$(arg camera)_rgb_optical_frame"/>
 	<arg name="surface_frame" default="surface"/>
+	<arg name="upright_frame" default="base_footprint"/>
+	<arg name="publish_surface_transform" default="false"/>
 
 	<arg name="apriltags2_image_forward" value="/apriltags2_image_forward"/>
 	<arg name="apriltags2_camera_info_forward" value="/apriltags2_camera_info_forward"/>
@@ -15,18 +17,18 @@
 		<arg name="always_enabled" value="false"/>
 		<arg name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
 		<arg name="surface_frame" value="$(arg surface_frame)"/>
+		<arg name="publish_surface_transform" default="$(arg publish_surface_transform)"/>
 	</include>
 
 	<node pkg='tams_bartender_recognition' type='detect_bottles_action' name='detect_bottles_action' output='screen'>
-		<param name="surface_frame" value="$(arg surface_frame)"/>
 		<param name="camera_frame" value="$(arg camera_frame)"/>
 	</node>
 
 	<node pkg='tams_bartender_recognition' type='detect_glass_action' name='detect_glass_action' output='screen'>
-		<!-- apriltag, glass id and camera/surface frames -->
+		<!-- apriltag, glass id and camera/upright frames -->
 		<param name="glass_tag" value="435"/>
 		<param name="glass_id" value="glass"/>
-		<param name="surface_frame" value="$(arg surface_frame)"/>
+		<param name="upright_frame" value="$(arg upright_frame)"/>
 		<param name="camera_frame" value="$(arg camera_frame)"/>
 
 		<!-- on demand image forward for apriltag detection -->
