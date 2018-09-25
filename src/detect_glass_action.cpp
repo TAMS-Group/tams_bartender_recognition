@@ -1,10 +1,11 @@
 #include <ros/ros.h>
 #include <actionlib/server/simple_action_server.h>
 #include <tiago_bartender_msgs/DetectGlassAction.h>
+#include <tams_bartender_recognition/SegmentationSwitch.h>
 
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 
-#include <std_srvs/SetBool.h>
+
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
 
@@ -155,8 +156,9 @@ class GlassDetectionServer
 
     bool setSegmentationEnabled(bool enabled) {
 
-      std_srvs::SetBool srv;
-      srv.request.data = enabled;
+      tams_bartender_recognition::SegmentationSwitch srv;
+      srv.request.enabled = enabled;
+      srv.request.header.stamp = ros::Time::now();
       if (!segmentation_client_.call(srv))
       {
         ROS_ERROR_STREAM("Calling object_segmentation_switch service failed." << std::endl
@@ -262,7 +264,7 @@ class GlassDetectionServer
   public:
     GlassDetectionServer() : as_(nh_, "detect_glass_action", boost::bind(&GlassDetectionServer::execute_cb, this, _1), false)
   {
-    segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
+    segmentation_client_ = nh_.serviceClient<tams_bartender_recognition::SegmentationSwitch>("object_segmentation_switch");
     tag_detections_sub_ = nh_.subscribe("tag_detections", 1, &GlassDetectionServer::tagDetectionCallback, this);
 
     ros::NodeHandle pnh("~");

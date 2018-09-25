@@ -27,6 +27,11 @@ add_message_files(
         RecognizedObject.msg
 	)
 
+add_service_files(
+	FILES
+	SegmentationSwitch.srv
+	)
+
 generate_messages(
 	DEPENDENCIES
 	std_msgs

@@ -42,10 +42,10 @@
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/PointCloud2.h>
 
-#include <std_srvs/SetBool.h>
-
 #include <tams_bartender_recognition/SegmentedObject.h>
 #include <tams_bartender_recognition/SegmentedObjectArray.h>
+#include <tams_bartender_recognition/SegmentationSwitch.h>
+
 
 struct BoundingBox {
     float x;
@@ -64,6 +64,7 @@ bool publish_surface_transform_ = false;
 bool has_surface_transform = false;
 bool has_cylinder_transform = false;
 bool enabled = false;
+ros::Time start_time_;
 tf::Transform surface_tf;
 tf::Transform cyl_tf;
 
@@ -384,23 +385,34 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
 	clusters_pub.publish (outcloud);
 }
 
-bool switch_cb(std_srvs::SetBool::Request  &req,
-               std_srvs::SetBool::Response &res)
+bool switch_cb(tams_bartender_recognition::SegmentationSwitch::Request  &req,
+               tams_bartender_recognition::SegmentationSwitch::Response &res)
 {
   // ignore if switch is already set to requested value
-  if (enabled == req.data) {
+  if (enabled == req.enabled) {
     ROS_WARN("Service call ignored - Object Segmentation is already switched to requested state!");
     return false;
   }
 
-  enabled = req.data;
+  start_time_ = req.header.stamp;
+  enabled = req.enabled;
   res.success = true;
   return true;
 }
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     if(!enabled)
-      return;
+	    return;
+
+    ros::Time cloud_time;
+    pcl_conversions::fromPCL(cloud_pcl2->header.stamp, cloud_time);
+
+    if(cloud_time < start_time_){
+      double delay = ros::Duration(start_time_ - cloud_time).toSec();
+      if(delay > 5.0)
+        ROS_ERROR_THROTTLE(3,"Object segmentation failed - Received point cloud is from %f seconds ago!", delay);
+	    return;
+    }
 
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);

@@ -2,7 +2,7 @@
 #include <actionlib/server/simple_action_server.h>
 #include <tiago_bartender_msgs/DetectBottlesAction.h>
 #include <tams_bartender_recognition/RecognizedObject.h>
-#include <std_srvs/SetBool.h>
+#include <tams_bartender_recognition/SegmentationSwitch.h>
 
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <tf/transform_listener.h>
@@ -100,8 +100,9 @@ class BottleActionServer
 
     void execute_cb(const tiago_bartender_msgs::DetectBottlesGoalConstPtr &goal)
     {
-      std_srvs::SetBool srv;
-      srv.request.data = true;
+      tams_bartender_recognition::SegmentationSwitch srv;
+      srv.request.enabled = true;
+      srv.request.header.stamp = ros::Time::now();
       if (!segmentation_client_.call(srv))
       {
         ROS_ERROR_STREAM("Calling object_segmentation_switch service failed." << std::endl
@@ -122,7 +123,8 @@ class BottleActionServer
       recognize_objects_ = false;
 
       // switch segmentation off
-      srv.request.data = false;
+      srv.request.enabled = false;
+      srv.request.header.stamp = ros::Time::now();
       if (!segmentation_client_.call(srv))
       {
         ROS_ERROR_STREAM("Calling object_segmentation_switch service failed." << std::endl
@@ -168,7 +170,7 @@ class BottleActionServer
     surface_frame_ = pnh.param<std::string>("surface_frame", "/surface");
     camera_frame_ = pnh.param<std::string>("camera_frame", "xtion_rgb_optical_frame");
 
-    segmentation_client_ = nh_.serviceClient<std_srvs::SetBool>("object_segmentation_switch");
+    segmentation_client_ = nh_.serviceClient<tams_bartender_recognition::SegmentationSwitch>("object_segmentation_switch");
     object_pose_sub = nh_.subscribe("object_poses", 1, &BottleActionServer::object_pose_cb, this);
     as_.start();
   }
