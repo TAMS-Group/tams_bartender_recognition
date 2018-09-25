@@ -1,13 +1,13 @@
 <?xml version="1.0"?>
 <launch>
 	<!-- camera topics and frames-->
-	<arg name="camera" default="camera"/>
-	<arg name="camera_rgb_prefix" default="camera/rgb"/>
+	<arg name="camera" default="xtion"/>
+	<arg name="camera_rgb_prefix" default="xtion/rgb"/>
 	<arg name="image_rect_suffix" default="image_rect_color"/>
 
-	<arg name="point_cloud_topic" default="/camera/depth_registered/points"/>
-	<arg name="rgb_frame" default="camera_rgb_optical_frame"/>
-	<arg name="depth_frame" default="camera_depth_optical_frame"/>
+	<arg name="point_cloud_topic" default="/xtion/depth_registered/points"/>
+	<arg name="rgb_frame" default="xtion_rgb_optical_frame"/>
+	<arg name="depth_frame" default="xtion_depth_optical_frame"/>
 	<arg name="publish_surface_transform" default="true"/>
 
 	<!-- launch camera -->
