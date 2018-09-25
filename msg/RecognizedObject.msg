@@ -1,2 +1,3 @@
 string id
 geometry_msgs/PoseStamped pose
+geometry_msgs/Transform surface_transform

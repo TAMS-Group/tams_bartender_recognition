@@ -32,6 +32,10 @@ class BottleActionServer
     std::string camera_frame_;
     tf::StampedTransform surface_camera_transform_;
 
+    std::map<std::string, tams_bartender_recognition::RecognizedObject> objects_;
+    std::map<std::string, int> object_count_;
+    ros::ServiceClient segmentation_client_;
+
 
     bool recognize_objects_ = false;
 
@@ -39,28 +43,30 @@ class BottleActionServer
     void object_pose_cb(const tams_bartender_recognition::RecognizedObject::ConstPtr& msg)
     {
       if(recognize_objects_) {
-        object_poses_[msg->id] = msg->pose;
+        objects_[msg->id] = *msg;
         object_count_[msg->id]++;
       }
     }
 
-    std::map<std::string, geometry_msgs::PoseStamped> object_poses_;
-    std::map<std::string, int> object_count_;
-    ros::ServiceClient segmentation_client_;
 
-    bool createCollisionObject(std::string id, geometry_msgs::PoseStamped pose, moveit_msgs::CollisionObject& object) {
+    bool createCollisionObject(std::string id, const tams_bartender_recognition::RecognizedObject& obj, moveit_msgs::CollisionObject& object) {
+
+      // add mesh to object
       collisionObjectFromResource(object, id, BOTTLE_MESH);
-      object.header.frame_id = camera_frame_;
       double mesh_height = computeMeshHeight(object.meshes[0]);
-      object.mesh_poses.resize(1);
 
+      // move object pose to half of mesh height
+      geometry_msgs::Pose pose = obj.pose.pose;
+      pose.position.z = 0.5 * mesh_height + 0.002;
+
+      // transform object pose to camera frame
+      tf::Transform camera_surface_transform;
       tf::Transform surface_obj_transform;
-      pose.pose.position.z = 0.5 * mesh_height + 0.002;
-      tf::poseMsgToTF(pose.pose, surface_obj_transform);
-      tf::poseTFToMsg(surface_camera_transform_.inverse() * surface_obj_transform, pose.pose);
-
-      // bottle center
-      object.mesh_poses[0] = pose.pose;
+      tf::poseMsgToTF(pose, surface_obj_transform);
+      tf::transformMsgToTF(obj.surface_transform, camera_surface_transform);
+      object.mesh_poses.resize(1);
+      tf::poseTFToMsg(camera_surface_transform * surface_obj_transform, object.mesh_poses[0]);
+      object.header.frame_id = camera_frame_;
 
       return true;
     }
@@ -106,7 +112,7 @@ class BottleActionServer
 
       // clear previous objects
       object_count_.clear();
-      object_poses_.clear();
+      objects_.clear();
 
       recognize_objects_ = true;
 
@@ -125,15 +131,15 @@ class BottleActionServer
         return;
       }
 
-      try {
-        tf_listener.waitForTransform(surface_frame_, camera_frame_, ros::Time(0), ros::Duration(1.0));
-        tf_listener.lookupTransform(surface_frame_, camera_frame_, ros::Time(0), surface_camera_transform_);
-      }
-      catch (...) {
-        ROS_ERROR_STREAM("Failed to detect bottles - No surface frame was found!");
-        as_.setAborted();
-        return;
-      }
+      //try {
+      //  tf_listener.waitForTransform(surface_frame_, camera_frame_, ros::Time(0), ros::Duration(1.0));
+      //  tf_listener.lookupTransform(surface_frame_, camera_frame_, ros::Time(0), surface_camera_transform_);
+      //}
+      //catch (...) {
+      //  ROS_ERROR_STREAM("Failed to detect bottles - No surface frame was found!");
+      //  as_.setAborted();
+      //  return;
+      //}
 
       tiago_bartender_msgs::DetectBottlesResult result;
       std::vector<moveit_msgs::CollisionObject> objs;
@@ -141,7 +147,7 @@ class BottleActionServer
         std::string id = it->first;
         if(object_count_[id] >= goal->stability_threshold) {
           moveit_msgs::CollisionObject object;
-          if(createCollisionObject(id, object_poses_[id], object)) {
+          if(createCollisionObject(id, objects_[id], object)) {
             objs.push_back(object);
           }
           result.detected_bottles.push_back(id);

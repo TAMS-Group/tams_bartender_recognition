@@ -112,6 +112,7 @@ def consume_candidate(candidate):
                     ro.pose.pose.orientation = o
                     ro.pose.pose.position.z = 0.5*obj_height
                     ro.pose.header.frame_id = surface_frame
+                    ro.surface_transform = candidate.surface_transform
                     publish_recognized_objects(ro)
 
 

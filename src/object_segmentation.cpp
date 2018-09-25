@@ -60,6 +60,7 @@ struct BoundingBox {
 ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub, object_image_pub;
 ros::ServiceServer switch_service;
 std::string surface_frame_;
+bool publish_surface_transform_ = false;
 bool has_surface_transform = false;
 bool has_cylinder_transform = false;
 bool enabled = false;
@@ -232,7 +233,7 @@ geometry_msgs::Pose getSurfacePoseFromCoefficients(pcl::ModelCoefficients::Ptr p
     return pose;
 }
 
-void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string& cloud_frame) {
+void updateSurfaceTransform(const geometry_msgs::Pose& pose, const std::string& cloud_frame) {
 
     tf::Transform new_tf;
     tf::poseMsgToTF(pose, new_tf);
@@ -241,7 +242,8 @@ void publishSurfaceTransform(const geometry_msgs::Pose& pose, const std::string&
     }
     surface_tf = new_tf;
     static tf::TransformBroadcaster tf_broadcaster;
-    tf_broadcaster.sendTransform(tf::StampedTransform(surface_tf, ros::Time::now(), cloud_frame, surface_frame_));
+    if(publish_surface_transform_)
+    	tf_broadcaster.sendTransform(tf::StampedTransform(surface_tf, ros::Time::now(), cloud_frame, surface_frame_));
     has_surface_transform = true;
 }
 
@@ -436,7 +438,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     geometry_msgs::Pose surface_pose = getSurfacePoseFromCoefficients(surface_coefs);
 
     // publish surface pose as surface_frame_ to /tf
-    publishSurfaceTransform(surface_pose, cloud->header.frame_id);
+    updateSurfaceTransform(surface_pose, cloud->header.frame_id);
 
     // filter point cloud to region above surface
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
@@ -535,6 +537,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
           // extract object image from full image
           object_msg.image = cutoutImage(&object_image, bb, cloud);
+          tf::transformTFToMsg(surface_tf, object_msg.surface_transform);
           // add SegmentedObject message to SegmentedObjectArray
           objects.objects.push_back(object_msg);
           objects.count++;
@@ -580,6 +583,7 @@ int main (int argc, char** argv)
 
     switch_service = nh.advertiseService("object_segmentation_switch", switch_cb);
     enabled = pnh.param("enabled", false);
+    publish_surface_transform_ = pnh.param("publish_surface_transform", false);
 
     // Spin
     ros::spin();
