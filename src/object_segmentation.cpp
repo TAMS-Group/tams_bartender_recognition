@@ -418,6 +418,9 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZRGB>);
     pcl::fromPCLPointCloud2 (*cloud_pcl2, *cloud);
 
+    // leave if cloud is empty
+    if(cloud->size() == 0)
+      return;
 
     //
     //         Extract surface transform and filter points in the region above it
@@ -425,15 +428,18 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
     // filter range of view
     filterRange(1.2, cloud, *cloud_filtered);
+    if(cloud_filtered->size() == 0)
+      return;
 
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr voxels (new pcl::PointCloud<pcl::PointXYZRGB>);
-
-    // downsample cloud
+    // remove NaNs
     std::vector<int> mapping;
     pcl::removeNaNFromPointCloud(*cloud_filtered, *cloud_filtered, mapping);
-    voxelFilter(cloud_filtered, *voxels);
+    if(cloud_filtered->size() == 0)
+      return;
 
-    // leave if cluster is empty
+    // downsample cloud
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr voxels (new pcl::PointCloud<pcl::PointXYZRGB>);
+    voxelFilter(cloud_filtered, *voxels);
     if(voxels->size() == 0)
       return;
 
@@ -458,6 +464,8 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     filterAboveSurface(surface_coefs, cloud_filtered, *surfaceCloud);
     filterAboveSurface(surface_coefs, voxels, *surfaceVoxels);
     surfaceVoxels->header.frame_id = cloud->header.frame_id;
+    if(surfaceVoxels->size() == 0 || surfaceCloud->size() == 0)
+      return;
 
     // publish segmented surface cloud
     pcl::PCLPointCloud2 outcloud;
@@ -465,15 +473,16 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
     pcl::toPCLPointCloud2 (*surfaceCloud, outcloud);
     surface_pub.publish (outcloud);
 
-
     // remove statistical outliers and NaNs
     removeStatisticalOutliers(surfaceVoxels, *surfaceVoxels);
+    if(surfaceVoxels->size() == 0)
+      return;
     pcl::removeNaNFromPointCloud(*surfaceVoxels, *surfaceVoxels, mapping);
-
-    // leave if cluster is empty
     if(surfaceVoxels->size() == 0)
       return;
 
+
+    // extract clusters from voxels
     std::vector<pcl::PointIndices> cluster_indices;
     extractClusters(surfaceVoxels, cluster_indices);
 
@@ -487,12 +496,11 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
       pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
       pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
 
-      for (int i : cluster.indices) {
+      for (int i : cluster.indices)
         cluster_cloud->points.push_back (surfaceVoxels->points[i]);
-      }
 
       if(cluster_cloud->points.size() == 0)
-        break;
+        continue;
 
       cluster_cloud->width = cluster_cloud->points.size();
       cluster_cloud->height = 1;
@@ -500,9 +508,8 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
       // segment cluster as cylinder
       estimateNormals(cluster_cloud, *cloud_normals);
-      if(!segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs)) {
+      if(!segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs))
         continue;
-      }
 
       tams_bartender_recognition::SegmentedObject object_msg;
 
