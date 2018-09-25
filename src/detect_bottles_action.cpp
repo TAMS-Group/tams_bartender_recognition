@@ -125,14 +125,20 @@ class BottleActionServer
         return;
       }
 
-      tf_listener.waitForTransform(surface_frame_, camera_frame_, ros::Time(0), ros::Duration(1.0));
-      tf_listener.lookupTransform(surface_frame_, camera_frame_, ros::Time(0), surface_camera_transform_);
-
+      try {
+        tf_listener.waitForTransform(surface_frame_, camera_frame_, ros::Time(0), ros::Duration(1.0));
+        tf_listener.lookupTransform(surface_frame_, camera_frame_, ros::Time(0), surface_camera_transform_);
+      }
+      catch (...) {
+        ROS_ERROR_STREAM("Failed to detect bottles - No surface frame was found!");
+        as_.setAborted();
+        return;
+      }
 
       tiago_bartender_msgs::DetectBottlesResult result;
       std::vector<moveit_msgs::CollisionObject> objs;
       for (std::map<std::string,int>::iterator it=object_count_.begin(); it!=object_count_.end(); ++it) {
-	      std::string id = it->first;
+        std::string id = it->first;
         if(object_count_[id] >= goal->stability_threshold) {
           moveit_msgs::CollisionObject object;
           if(createCollisionObject(id, object_poses_[id], object)) {
