@@ -1,0 +1,16 @@
+(lp0
+S'cherry'
+p1
+aS'coke'
+p2
+aS'lemon'
+p3
+aS'orange'
+p4
+aS'rum'
+p5
+aS'tequila'
+p6
+aS'water'
+p7
+a.
