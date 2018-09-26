@@ -1,8 +1,15 @@
 <?xml version="1.0"?>
 <launch>
+<!--
 	<include file="$(find astra_launch)/launch/astra.launch"/>
+-->
 
-	<node pkg="tams_bartender_recognition" type="object_segmentation" name="object_segmentation"/>
+	<node pkg="tams_bartender_recognition" type="object_segmentation" name="object_segmentation">
+		<param name="enabled" value="true"/>
+		<param name="point_cloud_topic" value="/xtion/depth_registered/points"/>
+		<param name="surface_frame" value="surface"/>
+		<param name="publish_surface_transform" value="false"/>
+</node>
 
 	<!-- node pkg="tams_bartender_recognition" type="sample_collector.py" name="sample_collector"/ -->
 
