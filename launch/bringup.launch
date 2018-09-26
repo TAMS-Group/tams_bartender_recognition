@@ -10,9 +10,6 @@
 	<arg name="upright_frame" default="base_footprint"/>
 	<arg name="publish_surface_transform" default="false"/>
 
-	<arg name="apriltags2_image_forward" value="/apriltags2_image_forward"/>
-	<arg name="apriltags2_camera_info_forward" value="/apriltags2_camera_info_forward"/>
-
 	<include file="$(find tams_bartender_recognition)/launch/recognition_pipeline.launch">
 		<arg name="always_enabled" value="false"/>
 		<arg name="point_cloud_topic" value="$(arg point_cloud_topic)"/>
@@ -23,28 +20,4 @@
 	<node pkg='tams_bartender_recognition' type='detect_bottles_action' name='detect_bottles_action' output='screen'>
 		<param name="camera_frame" value="$(arg camera_frame)"/>
 	</node>
-
-	<node pkg='tams_bartender_recognition' type='detect_glass_action' name='detect_glass_action' output='screen'>
-		<!-- apriltag, glass id and camera/upright frames -->
-		<param name="glass_tag" value="435"/>
-		<param name="glass_id" value="glass"/>
-		<param name="upright_frame" value="$(arg upright_frame)"/>
-		<param name="camera_frame" value="$(arg camera_frame)"/>
-
-		<!-- on demand image forward for apriltag detection -->
-		<param name="image_topic" value="$(arg camera_rgb)/$(arg image_rect_suffix)"/>
-		<param name="image_forward_topic" value="$(arg apriltags2_image_forward)"/>
-		<param name="camera_info_topic" value="$(arg camera_rgb)/camera_info"/>
-		<param name="camera_info_forward_topic" value="$(arg apriltags2_camera_info_forward)"/>
-
-		<!-- glass x/y offset from april tag -->
-		<param name="offset_x" value="0.1"/>
-		<param name="offset_y" value="0.0"/>
-	</node>
-
-	<include file="$(find tams_bartender_recognition)/launch/apriltags2.launch">
-		<arg name="image_rect" value="$(arg apriltags2_image_forward)"/>
-		<arg name="camera_info" value="$(arg apriltags2_camera_info_forward)"/>
-		<arg name="camera_frame" value="$(arg camera_frame)"/>
-	</include>
 </launch>
