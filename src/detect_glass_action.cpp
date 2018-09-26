@@ -36,6 +36,11 @@ class GlassDetectionServer
     std::string upright_frame_;
     std::string camera_frame_; // TODO: check for correct frame
 
+
+    // image forward parameters for april tag detection
+    std::string image_topic_;
+    std::string camera_info_topic_;
+
     // glass and tag ids
     std::string glass_id_;
     int glass_tag_id_;
@@ -208,6 +213,17 @@ class GlassDetectionServer
 
   protected:
 
+    void forwardCameraImage(bool enabled)
+    {
+      if (enabled) {
+        image_sub_ = nh_.subscribe(image_topic_, 1, &GlassDetectionServer::imageCallback, this);
+        camera_info_sub_ = nh_.subscribe(camera_info_topic_, 1, &GlassDetectionServer::camerainfoCallback, this);
+      } else {
+        image_sub_.shutdown();
+        camera_info_sub_.shutdown();
+      }
+    }
+
     void imageCallback(const sensor_msgs::ImageConstPtr& img)
     {
       if(detection_running_)
@@ -233,12 +249,14 @@ class GlassDetectionServer
       // start detection
       tag_found_ = false;
       detection_running_ = true;
+      forwardCameraImage(true);
 
       // wait for timeout
       ros::Duration(goal->timeout).sleep();
 
       // stop detection
       detection_running_ = false;
+      forwardCameraImage(false);
 
       // create collision object with mesh
       moveit_msgs::CollisionObject glass;
@@ -264,12 +282,9 @@ class GlassDetectionServer
   public:
     GlassDetectionServer() : as_(nh_, "detect_glass_action", boost::bind(&GlassDetectionServer::execute_cb, this, _1), false)
   {
-    segmentation_client_ = nh_.serviceClient<tams_bartender_recognition::SegmentationSwitch>("object_segmentation_switch");
-    tag_detections_sub_ = nh_.subscribe("tag_detections", 1, &GlassDetectionServer::tagDetectionCallback, this);
-
     ros::NodeHandle pnh("~");
 
-    //  load params
+    //  glass pose parameters
     glass_tag_id_ = pnh.param("glass_tag", 435);
     glass_id_ = pnh.param<std::string>("glass_id", "glass");
     offset_x_ = pnh.param("offset_x", 0.1);
@@ -278,16 +293,21 @@ class GlassDetectionServer
     camera_frame_ = pnh.param<std::string>("camera_frame", "/camera_rgb_optical_frame");
     filter_weight_ = pnh.param("glass_pose_filter_weight", 0.25);
 
-    // image forward for april tag detection
-    std::string image_topic = pnh.param<std::string>("image_topic", "/camera/rgb/image_rect_color");
-    std::string image_forward_topic = pnh.param<std::string>("image_forward_topic", "/apriltags2_image_forward");
-    image_sub_ = nh_.subscribe(image_topic, 1, &GlassDetectionServer::imageCallback, this);
-    image_pub_ = nh_.advertise<sensor_msgs::Image>(image_forward_topic, 1);
+    // image subscriber topics for apriltag detection
+    image_topic_ = pnh.param<std::string>("image_topic", "/camera/rgb/image_rect_color");
+    camera_info_topic_ = pnh.param<std::string>("camera_info_topic", "/camera/rgb/camera_info");
 
-    std::string camera_info_topic = pnh.param<std::string>("camera_info_topic", "/camera/rgb/camera_info");
+    // camera forward publishers
+    std::string image_forward_topic = pnh.param<std::string>("image_forward_topic", "/apriltags2_image_forward");
     std::string camera_info_forward_topic = pnh.param<std::string>("camera_info_forward_topic", "/apriltags2_camera_info_forward");
+    image_pub_ = nh_.advertise<sensor_msgs::Image>(image_forward_topic, 1);
     camera_info_pub_ = nh_.advertise<sensor_msgs::CameraInfo>(camera_info_forward_topic, 1);
-    camera_info_sub_ = nh_.subscribe(camera_info_topic, 1, &GlassDetectionServer::camerainfoCallback, this);
+
+    // setup detection pipeline
+    segmentation_client_ = nh_.serviceClient<tams_bartender_recognition::SegmentationSwitch>("object_segmentation_switch");
+    tag_detections_sub_ = nh_.subscribe("tag_detections", 1, &GlassDetectionServer::tagDetectionCallback, this);
+
+    // start action server
     as_.start();
   }
 };
