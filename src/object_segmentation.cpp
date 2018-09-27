@@ -612,8 +612,10 @@ int main (int argc, char** argv)
   object_image_pub = nh.advertise<sensor_msgs::Image>("/object_image", 1);
 
   // Create a ROS subscriber for the input point cloud
-  if(enabled)
+  if(enabled) {
+    start_time_ = ros::Time::now();
     pcl_sub_ = nh.subscribe (point_cloud_topic_, 1, callback);
+  }
 
   // Spin
   ros::spin();
