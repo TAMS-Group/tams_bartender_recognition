@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
 	<!-- camera topics and frames-->
-	<arg name="camera" default="camera"/>
+	<arg name="camera" default="xtion"/>
 	<arg name="camera_rgb_prefix" default="$(arg camera)/rgb"/>
 	<arg name="image_rect_suffix" default="image_rect_color"/>
 
@@ -15,6 +15,7 @@
 		<arg name="camera" value="$(arg camera)"/>
 		<arg name="rgb_frame_id" value="$(arg rgb_frame)"/>
 		<arg name="depth_frame_id" value="$(arg depth_frame)"/>
+		<arg name="publish_tf" value="false" />
 	</include>
 
 	<!-- launch recognition -->
