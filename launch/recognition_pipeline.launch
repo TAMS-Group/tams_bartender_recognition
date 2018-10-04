@@ -6,7 +6,7 @@
 	<arg name="publish_surface_transform" default="false"/>
 
 	<node pkg='tams_bartender_recognition' type='classification_node.py' name='object_classification' output='log'>
-		<param name="object_group" value="tiago_labels_3" />
+		<param name="object_group" value="tiago_labels_all" />
 		<param name="version" value="1"/>
 	</node>
 
