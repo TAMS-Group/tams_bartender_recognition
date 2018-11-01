@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 #include <actionlib/server/simple_action_server.h>
-#include <tiago_bartender_msgs/DetectGlassAction.h>
+#include <tams_bartender_msgs/DetectGlassAction.h>
 #include <tams_bartender_recognition/SegmentationSwitch.h>
 
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
@@ -29,7 +29,7 @@ class GlassDetectionServer
     ros::Subscriber tag_detections_sub_, image_sub_, camera_info_sub_;
     ros::Publisher image_pub_, camera_info_pub_;
     ros::ServiceClient segmentation_client_;
-    actionlib::SimpleActionServer<tiago_bartender_msgs::DetectGlassAction> as_;
+    actionlib::SimpleActionServer<tams_bartender_msgs::DetectGlassAction> as_;
 
 
     // surface and camera frames
@@ -237,7 +237,7 @@ class GlassDetectionServer
     }
 
 
-    void execute_cb(const tiago_bartender_msgs::DetectGlassGoalConstPtr &goal)
+    void execute_cb(const tams_bartender_msgs::DetectGlassGoalConstPtr &goal)
     {
       // retrieve stable surface frame
       if(!findStableSurfaceFrame()) {
@@ -274,7 +274,7 @@ class GlassDetectionServer
       psi.applyCollisionObject(glass);
 
       // return result
-      tiago_bartender_msgs::DetectGlassResult result;
+      tams_bartender_msgs::DetectGlassResult result;
       result.detected_glass = glass_id_;
       as_.setSucceeded(result);
     }

@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 #include <actionlib/server/simple_action_server.h>
-#include <tiago_bartender_msgs/DetectBottlesAction.h>
+#include <tams_bartender_msgs/DetectBottlesAction.h>
 #include <tams_bartender_recognition/RecognizedObject.h>
 #include <tams_bartender_recognition/SegmentationSwitch.h>
 
@@ -27,7 +27,7 @@ class BottleActionServer
 
   private:
     ros::NodeHandle nh_;
-    actionlib::SimpleActionServer<tiago_bartender_msgs::DetectBottlesAction> as_;
+    actionlib::SimpleActionServer<tams_bartender_msgs::DetectBottlesAction> as_;
     ros::Subscriber object_pose_sub;
     tf::TransformListener tf_listener;
 
@@ -151,7 +151,7 @@ class BottleActionServer
 
   protected:
 
-    void execute_cb(const tiago_bartender_msgs::DetectBottlesGoalConstPtr &goal)
+    void execute_cb(const tams_bartender_msgs::DetectBottlesGoalConstPtr &goal)
     {
       tams_bartender_recognition::SegmentationSwitch srv;
       srv.request.enabled = true;
@@ -187,7 +187,7 @@ class BottleActionServer
       }
 
       int i = 0;
-      tiago_bartender_msgs::DetectBottlesResult result;
+      tams_bartender_msgs::DetectBottlesResult result;
       std::vector<moveit_msgs::CollisionObject> objs;
       for (std::map<std::string,int>::iterator it=object_count_.begin(); it!=object_count_.end(); ++it) {
         std::string id = it->first;

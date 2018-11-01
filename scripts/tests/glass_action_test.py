@@ -3,7 +3,7 @@
 import sys
 import rospy
 import actionlib
-from tiago_bartender_msgs.msg import *
+from tams_bartender_msgs.msg import *
 
 
 # main function
