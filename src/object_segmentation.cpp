@@ -110,7 +110,7 @@ void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl
 
   for(pcl::PointXYZRGB point : *incloud) {
     float point_distance = (point.x * a + point.y * b + point.z * c - d / sqrt_abc);
-    if(0.015 < point_distance && point_distance < 0.2) {
+    if(min < point_distance && point_distance < max) {
       outcloud.push_back(point);
     }
   }
