@@ -371,18 +371,21 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
 
   //std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
   //std::cerr << "Cluster sizes: ";
+
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr color_filtered_cloud(new pcl::PointCloud<pcl::PointXYZRGB>(*cloud_filtered));
+
   std::vector<int> sizes;
   for(int i = 0; i < cluster_indices.size(); i++) {
     const pcl::PointIndices indices = cluster_indices[i];
     //std::cerr << indices.indices.size() << ' ';
     for (int j : indices.indices){
-      setColor((*cloud_filtered)[j], i);
+      setColor((*color_filtered_cloud)[j], i);
     }
   }
   //std::cerr << std::endl;
 
   pcl::PCLPointCloud2 outcloud;
-  pcl::toPCLPointCloud2 (*cloud_filtered, outcloud);
+  pcl::toPCLPointCloud2 (*color_filtered_cloud, outcloud);
   clusters_pub.publish (outcloud);
 }
 
