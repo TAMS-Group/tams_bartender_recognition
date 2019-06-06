@@ -46,8 +46,8 @@ class BottleActionServer
     void object_pose_cb(const tams_bartender_recognition::RecognizedObject::ConstPtr& msg)
     {
       if(recognize_objects_) {
-        objects_[msg->id] = *msg;
-        object_count_[msg->id]++;
+        objects_[msg->class_label] = *msg;
+        object_count_[msg->class_label]++;
       }
     }
 
@@ -59,7 +59,7 @@ class BottleActionServer
       object.header.frame_id = camera_frame_;
 
       // move object pose to half of mesh height
-      geometry_msgs::Pose pose = obj.pose.pose;
+      geometry_msgs::Pose pose = obj.pose;
       double mesh_height = computeMeshHeight(object.meshes[0]);
       pose.position.z = 0.5 * mesh_height + 0.002;
       pose.orientation.w = 1.0;
@@ -68,8 +68,8 @@ class BottleActionServer
       tf::Transform camera_surface_transform;
       tf::Transform surface_obj_transform;
       tf::poseMsgToTF(pose, surface_obj_transform);
-      tf::transformMsgToTF(obj.surface_transform, camera_surface_transform);
-      tf::poseTFToMsg(camera_surface_transform * surface_obj_transform, object.mesh_poses[0]);
+      //tf::transformMsgToTF(obj.surface_transform, camera_surface_transform);
+      tf::poseTFToMsg(surface_obj_transform, object.mesh_poses[0]);
 
       // publish bottle marker
       publishBottleMarker(i, id, camera_frame_, object.mesh_poses[0]);

@@ -24,7 +24,8 @@ add_message_files(
 	FILES
 	SegmentedObject.msg
 	SegmentedObjectArray.msg
-        RecognizedObject.msg
+    RecognizedObject.msg
+    RecognizedObjectArray.msg
 	)
 
 add_service_files(

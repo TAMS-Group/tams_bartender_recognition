@@ -45,6 +45,8 @@
 #include <tams_bartender_recognition/SegmentedObject.h>
 #include <tams_bartender_recognition/SegmentedObjectArray.h>
 #include <tams_bartender_recognition/SegmentationSwitch.h>
+#include <tams_bartender_recognition/RecognizedObject.h>
+#include <tams_bartender_recognition/RecognizedObjectArray.h>
 
 
 struct BoundingBox {
@@ -58,13 +60,14 @@ struct BoundingBox {
 
 
 ros::Subscriber pcl_sub_;
-ros::Publisher surface_pub, cyl_marker_pub, objects_pub, clusters_pub, object_image_pub;
+ros::Publisher surface_pub, clusters_pub, recognized_object_pub, cluster_cloud_pub;
 ros::ServiceServer switch_service;
 std::string surface_frame_, point_cloud_topic_;
 bool publish_surface_transform_ = false;
 bool has_surface_transform = false;
 bool has_cylinder_transform = false;
 bool enabled = false;
+bool bottle_detection_enabled;
 ros::Time start_time_;
 tf::Transform surface_tf;
 tf::Transform cyl_tf;
@@ -78,6 +81,7 @@ void interpolateTransforms(const tf::Transform& t1, const tf::Transform& t2, dou
   t_out.setRotation( t1.getRotation().slerp(t2.getRotation(), fraction) );
 }
 
+
 void estimateNormals(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointCloud<pcl::Normal>& normals) {
   pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB> ());
   pcl::NormalEstimationOMP<pcl::PointXYZRGB, pcl::Normal> ne;
@@ -87,8 +91,8 @@ void estimateNormals(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Po
   ne.compute (normals);
 }
 
+
 void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
-  // filter range
   pcl::ModelCoefficients sphere_coeff;
   sphere_coeff.values.resize (4);
 
@@ -100,7 +104,8 @@ void filterRange(double range, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
   sphere_filter.filter (outcloud);
 }
 
-void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud, double min=0.015, double max=0.2) {
+
+void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud, double min=0.010, double max=0.5) {
   float a = plane_coefs->values[0];
   float b = plane_coefs->values[1];
   float c = plane_coefs->values[2];
@@ -116,6 +121,7 @@ void filterAboveSurface(const pcl::ModelCoefficients::Ptr plane_coefs, const pcl
   }
 }
 
+
 void voxelFilter(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud)
 {
   // Create the filtering object
@@ -123,7 +129,9 @@ void voxelFilter(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::Poin
   sor.setInputCloud (incloud);
   sor.setLeafSize (0.005f, 0.005f, 0.005f);
   sor.filter (outcloud);
+    //TODO add mapping, std::map<Eigen::Vector3i, std::vector<int>> gridcoordinates/voxels to indices in pointcloud
 }
+
 
 void removeStatisticalOutliers(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
   pcl::StatisticalOutlierRemoval<pcl::PointXYZRGB> sor;
@@ -134,8 +142,11 @@ void removeStatisticalOutliers(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incl
   sor.filter (outcloud);
 }
 
+
 bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr plane_coefs) {
+
   pcl::SACSegmentation<pcl::PointXYZRGB> seg;
+
   seg.setOptimizeCoefficients (true);
   seg.setModelType (pcl::SACMODEL_PLANE);
   seg.setMethodType (pcl::SAC_RANSAC);
@@ -149,8 +160,8 @@ bool segmentSurface(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, pcl::Poi
   return inliers->indices.size() > 0;
 }
 
-bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const pcl::PointCloud<pcl::Normal>::Ptr normals, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr coefficients) {
 
+bool segment_cylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const pcl::PointCloud<pcl::Normal>::Ptr normals, pcl::PointIndices::Ptr inliers, pcl::ModelCoefficients::Ptr coefficients) {
 
   pcl::SACSegmentationFromNormals<pcl::PointXYZRGB, pcl::Normal> seg;
 
@@ -167,31 +178,9 @@ bool segmentCylinder(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud, const p
   // Obtain the cylinder inliers and coefficients
   seg.segment (*inliers, *coefficients);
   return inliers->indices.size() > 0;
-
-  /*
-
-     pcl::ModelCoefficients::Ptr coefficients_cylinder (new pcl::ModelCoefficients);
-     pcl::PointIndices::Ptr inliers_cylinder (new pcl::PointIndices);
-     pcl::SampleConsensusModelCylinder<pcl::PointXYZRGB, pcl::Normal>::Ptr
-     cylinder_model(new pcl::SampleConsensusModelCylinder<pcl::PointXYZRGB, pcl::Normal> (cloud_filtered));
-     cylinder_model->setAxis(Eigen::Vector3f(0, 0, 1));
-     cylinder_model->setRadiusLimits (0.035, 0.045);
-     cylinder_model->setInputCloud(cloud_filtered);
-     cylinder_model->setInputNormals(cloud_normals);
-     pcl::RandomSampleConsensus<pcl::PointXYZRGB> ransac(cylinder_model);
-     ransac.setDistanceThreshold(0.0);
-     ransac.computeModel();
-     ransac.getInliers(inliers_cylinder->indices);
-     Eigen::VectorXf coefs;
-     ransac.getModelCoefficients(coefs);
-     if(coefs.size() == 4) {
-     coefficients_cylinder->values[0] = coefs[0];
-     coefficients_cylinder->values[1] = coefs[1];
-     coefficients_cylinder->values[2] = coefs[2];
-     coefficients_cylinder->values[3] = coefs[3];
-     }
-     */
 }
+
+
 
 void transformPointCloud(const tf::Transform transform, const std::string& frame_id, const pcl::PointCloud<pcl::PointXYZRGB>::Ptr incloud, pcl::PointCloud<pcl::PointXYZRGB>& outcloud) {
   Eigen::Affine3d surface_affine = Eigen::Affine3d::Identity();
@@ -199,6 +188,7 @@ void transformPointCloud(const tf::Transform transform, const std::string& frame
   pcl::transformPointCloud (*incloud, outcloud, surface_affine.inverse());
   outcloud.header.frame_id = frame_id;
 }
+
 
 void normalizeSurfaceCoefficients(pcl::ModelCoefficients::Ptr plane_coefs) {
   plane_coefs->values[3] = -plane_coefs->values[3];
@@ -209,6 +199,7 @@ void normalizeSurfaceCoefficients(pcl::ModelCoefficients::Ptr plane_coefs) {
     plane_coefs->values[3] = -plane_coefs->values[3];
   }
 }
+
 
 geometry_msgs::Pose getSurfacePoseFromCoefficients(pcl::ModelCoefficients::Ptr plane_coefs) {
   geometry_msgs::Pose pose;
@@ -235,6 +226,7 @@ geometry_msgs::Pose getSurfacePoseFromCoefficients(pcl::ModelCoefficients::Ptr p
   return pose;
 }
 
+
 void updateSurfaceTransform(const geometry_msgs::Pose& pose, const std::string& cloud_frame) {
 
   tf::Transform new_tf;
@@ -249,10 +241,12 @@ void updateSurfaceTransform(const geometry_msgs::Pose& pose, const std::string& 
   has_surface_transform = true;
 }
 
+
 void index_to_xy(int index, int width, int &x, int &y) {
   x = index % width;
   y = index / width;
 }
+
 
 sensor_msgs::Image cutoutImage(const sensor_msgs::Image *image,
     BoundingBox bb, const pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr &cloud) {
@@ -320,18 +314,8 @@ sensor_msgs::Image cutoutImage(const sensor_msgs::Image *image,
   return output_image;
 }
 
+
 void setColor(pcl::PointXYZRGB &point, int color) {
-  //std::map<std::string, std::vector<int>> const colors {
-  //	{ "red", {255, 0, 0} },
-  //	{ "green", {0, 255, 0} },
-  //	{ "blue", {0, 0, 255} },
-  //	{ "yellow", {255, 255, 0} },
-  //	{ "magenta", {255, 0, 255} },
-  //	{ "cyan", {0, 255, 255} },
-  //	{ "black", {0, 0, 0} },
-  //	{ "orange", {255, 91, 0} },
-  //	{ "purple", {111, 49, 152}  }
-  //};
 
   const std::vector<std::vector<int>> colors  = {
     { {255, 0, 0} },
@@ -350,13 +334,9 @@ void setColor(pcl::PointXYZRGB &point, int color) {
   point.b = c[2];
 }
 
+
 void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered, std::vector<pcl::PointIndices> &cluster_indices) {
 
-  //pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered(new pcl::PointCloud<pcl::PointXYZRGB>);
-  //std::vector<int> mapping;
-  //pcl::removeNaNFromPointCloud(*cloud, *cloud_filtered, mapping);
-
-  //cloud_filtered->is_dense = false;
   // Creating the KdTree object for the search method of the extraction
   pcl::search::KdTree<pcl::PointXYZRGB>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGB>);
   tree->setInputCloud (cloud_filtered);
@@ -369,26 +349,96 @@ void extractClusters(const pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud_filtered
   ec.setInputCloud (cloud_filtered);
   ec.extract (cluster_indices);
 
-  //std::cerr << "Found " << cluster_indices.size() << " clusters" << std::endl;
-  //std::cerr << "Cluster sizes: ";
-
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr color_filtered_cloud(new pcl::PointCloud<pcl::PointXYZRGB>(*cloud_filtered));
 
   std::vector<int> sizes;
   for(int i = 0; i < cluster_indices.size(); i++) {
     const pcl::PointIndices indices = cluster_indices[i];
-    //std::cerr << indices.indices.size() << ' ';
     for (int j : indices.indices){
       setColor((*color_filtered_cloud)[j], i);
     }
   }
-  //std::cerr << std::endl;
+
+//////////
+//
+// start publish each cluster as a pointcloud
+// http://pointclouds.org/documentation/tutorials/writing_pcd.php
+//
+//////////
+/*
+ *
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr clustered_filtered_cloud(new pcl::PointCloud<pcl::PointXYZRGB>(*cloud_filtered));
+  // create a new point cloud object
+  pcl::PointCloud<pcl::PointXYZRGB> cluster_cloud;
+ 
+  for(int i = 0; i < cluster_indices.size(); i++) {
+    const pcl::PointIndices indices = cluster_indices[i]; // indices
+    cluster_cloud.width = indices.indices.size();
+    cluster_cloud.height = 1;
+    cluster_cloud.points.resize(indices.indices.size());
+        
+    // write each point in this cluster (via indices) to the point cloud
+    for (size_t j = 0; j < cluster_cloud.points.size (); ++j){
+      int k = indices.indices[j];
+      cluster_cloud.points[j].x = (*clustered_filtered_cloud)[k].x;
+      cluster_cloud.points[j].y = (*clustered_filtered_cloud)[k].y;
+      cluster_cloud.points[j].z = (*clustered_filtered_cloud)[k].z;
+    }
+
+    pcl::PCLPointCloud2 pub_cloud;
+
+    pcl::toPCLPointCloud2 (cluster_cloud, pub_cloud);
+
+    pub_cloud.header = cloud_filtered->header;
+
+    cluster_cloud_pub.publish(pub_cloud);
+  }
+ 
+  *
+  */
+//////////
+//
+//
+//
+//////////
 
   pcl::PCLPointCloud2 outcloud;
   pcl::toPCLPointCloud2 (*color_filtered_cloud, outcloud);
   clusters_pub.publish (outcloud);
 }
 
+
+void get_object_msg_from_cluster_cloud(pcl::PointCloud<pcl::PointXYZRGB>::ConstPtr full_cloud, pcl::PointIndices& cluster, tams_bartender_recognition::RecognizedObject& object){
+
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+
+  pcl::ExtractIndices<pcl::PointXYZRGB> extract;
+  extract.setInputCloud(full_cloud);
+  pcl::PointIndices::Ptr cluster_ptr(new pcl::PointIndices(cluster));
+  extract.setIndices(cluster_ptr);
+  
+  extract.filter(*cluster_cloud);
+
+  pcl::toROSMsg(*cluster_cloud, object.point_cloud);
+
+  pcl_conversions::fromPCL(full_cloud->header, object.header);
+
+  //sensor_msgs::Image image = cutoutImage(image, bounding_box, cluster_cloud);
+
+  /*
+   * RecognizedObject:
+  std_msgs/Header header
+
+  sensor_msgs/PointCloud2 point_cloud
+
+  sensor_msgs/Image image
+
+  string class_label
+  geometry_msgs/Pose pose
+  */
+
+  // basic object parameters
+}
 
 
 void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
@@ -400,8 +450,10 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
   if(cloud_time < start_time_){
     double delay = ros::Duration(start_time_ - cloud_time).toSec();
+    double start_time = start_time_.toSec();
     if(delay > 5.0)
       ROS_ERROR_THROTTLE(3,"Object segmentation failed - Received point cloud is from %f seconds ago!", delay);
+      ROS_ERROR_THROTTLE(3,"start_time: %f", start_time);
     return;
   }
 
@@ -418,7 +470,8 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   //
 
   // filter range of view
-  filterRange(0.95, cloud, *cloud_filtered);
+  //TODO replace filter_range by filterprismeticvolume on top of table
+  filterRange(1.10, cloud, *cloud_filtered);
   if(cloud_filtered->size() == 0)
     return;
 
@@ -454,7 +507,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   pcl::PointCloud<pcl::PointXYZRGB>::Ptr surfaceVoxels (new pcl::PointCloud<pcl::PointXYZRGB>);
   filterAboveSurface(surface_coefs, cloud_filtered, *surfaceCloud);
   filterAboveSurface(surface_coefs, voxels, *surfaceVoxels);
-  surfaceVoxels->header.frame_id = cloud->header.frame_id;
+  surfaceVoxels->header = cloud->header;
   if(surfaceVoxels->size() == 0 || surfaceCloud->size() == 0)
     return;
 
@@ -472,102 +525,33 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   if(surfaceVoxels->size() == 0)
     return;
 
-
   // extract clusters from voxels
+  std::vector<pcl::PointIndices> voxel_cluster_indices;
   std::vector<pcl::PointIndices> cluster_indices;
-  extractClusters(surfaceVoxels, cluster_indices);
 
-  tams_bartender_recognition::SegmentedObjectArray objects;
-  objects.header.frame_id = surface_frame_;
-  objects.header.stamp = ros::Time::now();
+  extractClusters(surfaceVoxels, voxel_cluster_indices);
 
-  for(const pcl::PointIndices cluster : cluster_indices) {
-    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cluster_cloud (new pcl::PointCloud<pcl::PointXYZRGB>);
-    pcl::PointCloud<pcl::Normal>::Ptr cloud_normals (new pcl::PointCloud<pcl::Normal>);
-    pcl::ModelCoefficients::Ptr cyl_coefs (new pcl::ModelCoefficients);
-    pcl::PointIndices::Ptr cyl_inliers (new pcl::PointIndices);
+  //TODO generate cluster_indices properly
+  cluster_indices = voxel_cluster_indices;
 
-    for (int i : cluster.indices)
-      cluster_cloud->points.push_back (surfaceVoxels->points[i]);
-
-    if(cluster_cloud->points.size() == 0)
-      continue;
-
-    cluster_cloud->width = cluster_cloud->points.size();
-    cluster_cloud->height = 1;
-    cluster_cloud->is_dense = true;
-
-    // segment cluster as cylinder
-    estimateNormals(cluster_cloud, *cloud_normals);
-    if(!segmentCylinder(cluster_cloud, cloud_normals, cyl_inliers, cyl_coefs))
-      continue;
-
-    tams_bartender_recognition::SegmentedObject object_msg;
-
-    // basic object parameters
-    double x = cyl_coefs->values[0];
-    double y = cyl_coefs->values[1];
-    double z = cyl_coefs->values[2];
-    double object_radius = cyl_coefs->values[6];
-
-    // retrieve object pose in surface frame
-    tf::Transform cam_to_object(tf::Quaternion::getIdentity(), tf::Vector3(x, y, z));
-    tf::Transform surface_to_object = surface_tf.inverse() * cam_to_object;
-
-    // fix object to upright rotation and align z with surface
-    surface_to_object.setRotation(tf::Quaternion::getIdentity());
-    tf::Vector3 objectXYZ = surface_to_object.getOrigin();
-    objectXYZ.setZ(0.0);
-    surface_to_object.setOrigin(objectXYZ);
-
-    // create pose stamped in surface frame
-    object_msg.pose.header.frame_id = surface_frame_;
-    tf::poseTFToMsg(surface_to_object, object_msg.pose.pose);
-
-    // Try to extract a 2d image of the object
-    try{
-      // get full 2d image of cloud
-      sensor_msgs::Image object_image;
-      object_image.width=100;
-      object_image.height=200;
-      pcl::toROSMsg(*cloud, object_image);
-
-      objectXYZ.setZ(0.15);
-      surface_to_object.setOrigin(objectXYZ);
-      cam_to_object = surface_tf * surface_to_object;
-
-      // define bounding box size and position
-      BoundingBox bb;
-      bb.x = cam_to_object.getOrigin().getX();
-      bb.y = cam_to_object.getOrigin().getY();
-      bb.z = cam_to_object.getOrigin().getZ();
-      bb.width = 0.15;
-      bb.height = 0.3;
-      bb.depth = 0.3;
-
-      // extract object image from full image
-      object_msg.image = cutoutImage(&object_image, bb, cloud);
-      tf::transformTFToMsg(surface_tf, object_msg.surface_transform);
-      // add SegmentedObject message to SegmentedObjectArray
-      objects.objects.push_back(object_msg);
-      objects.count++;
-    }
-    catch (std::runtime_error)
-    {
-      ROS_ERROR("Unable to extract object image from cloud!");
-    }
+  for (pcl::PointIndices& cluster : cluster_indices){
+    tams_bartender_recognition::RecognizedObject recognized_object;
+        get_object_msg_from_cluster_cloud(surfaceVoxels, cluster, recognized_object);
+    recognized_object_pub.publish(recognized_object);
   }
 
-  if(objects.objects.size() > 0)
+  tams_bartender_recognition::RecognizedObject recognized_object;
+
+  recognized_object.header.frame_id = surface_frame_;
+  // TODO update header.stamp correctly
+  recognized_object.header.stamp = ros::Time::now();
+
+  if(cluster_indices.empty())
   {
-    objects_pub.publish(objects);
-    object_image_pub.publish(objects.objects[0].image);
-  }
-  else
-  {
-    ROS_WARN_STREAM_THROTTLE(3, "Did not find any objects. Found " << cluster_indices.size() << " clusters (object candidates).");
+    ROS_WARN_STREAM_THROTTLE(3, "Did not find any clusters.");
   }
 }
+
 
 bool switch_cb(tams_bartender_recognition::SegmentationSwitch::Request  &req,
     tams_bartender_recognition::SegmentationSwitch::Response &res)
@@ -591,7 +575,6 @@ bool switch_cb(tams_bartender_recognition::SegmentationSwitch::Request  &req,
 }
 
 
-
 int main (int argc, char** argv)
 {
   // Initialize ROS
@@ -605,21 +588,26 @@ int main (int argc, char** argv)
   switch_service = nh.advertiseService("object_segmentation_switch", switch_cb);
   enabled = pnh.param("enabled", false);
   publish_surface_transform_ = pnh.param("publish_surface_transform", false);
+  bottle_detection_enabled = pnh.param("bottle_detection_enabled", true);
 
+  // Creates ROS publisher
+  surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("segmented_surface", 1);
+  clusters_pub = nh.advertise<sensor_msgs::PointCloud2> ("extracted_clusters", 1);
 
-  // Create a ROS publisher for the output point cloud
-  surface_pub = nh.advertise<sensor_msgs::PointCloud2> ("/segmented_surface", 1);
-  clusters_pub = nh.advertise<sensor_msgs::PointCloud2> ("/extracted_clusters", 1);
-  cyl_marker_pub = nh.advertise<visualization_msgs::Marker> ("cylinders", 1);
-  objects_pub = nh.advertise<tams_bartender_recognition::SegmentedObjectArray>("/segmented_objects", 1);
-  object_image_pub = nh.advertise<sensor_msgs::Image>("/object_image", 1);
+  // Creates a ROS publisher for cloud_cluster, publish single clusters
+  cluster_cloud_pub = nh.advertise<sensor_msgs::PointCloud2> ("cloud_cluster", 1);
+
+  recognized_object_pub = nh.advertise<tams_bartender_recognition::RecognizedObject>("segmented_object", 20);
 
   // Create a ROS subscriber for the input point cloud
   if(enabled) {
     start_time_ = ros::Time::now();
+
+    double start_time = start_time_.toSec();
+    ROS_ERROR_THROTTLE(3,"start_time: %f", start_time);
+
     pcl_sub_ = nh.subscribe (point_cloud_topic_, 1, callback);
   }
 
-  // Spin
   ros::spin();
 }

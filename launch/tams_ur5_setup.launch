@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<launch>
+<!--
+	<node pkg='tams_bartender_recognition' type='classification_node.py' name='object_classification' output='log'>
+		<param name="object_group" value="tiago_labels_all" />
+		<param name="version" value="1"/>
+	</node>
+-->
+
+	<node pkg='tams_bartender_recognition' type='object_segmentation' name='object_segmentation' output='screen'>
+		<param name="enabled" value="true"/>
+		<param name="point_cloud_topic" value="/kinect2/qhd/points"/>
+		<param name="surface_frame" value="segmented_table"/>
+		<param name="publish_surface_transform" value="true"/>
+        <param name="bottle_detection_enabled" value="true"/>
+	</node>
+</launch>
