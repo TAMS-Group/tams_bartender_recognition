@@ -451,9 +451,10 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
   if(cloud_time < start_time_){
     double delay = ros::Duration(start_time_ - cloud_time).toSec();
     double start_time = start_time_.toSec();
-    if(delay > 5.0)
+    if(delay > 5.0){
       ROS_ERROR_THROTTLE(3,"Object segmentation failed - Received point cloud is from %f seconds ago!", delay);
       ROS_ERROR_THROTTLE(3,"start_time: %f", start_time);
+    }
     return;
   }
 
@@ -604,7 +605,6 @@ int main (int argc, char** argv)
     start_time_ = ros::Time::now();
 
     double start_time = start_time_.toSec();
-    ROS_ERROR_THROTTLE(3,"start_time: %f", start_time);
 
     pcl_sub_ = nh.subscribe (point_cloud_topic_, 1, callback);
   }
