@@ -21,7 +21,7 @@ def extract_pointcloud_from_msg(recognized_object_msg):
 # main-function, which start the subscriber and initialize the node
 ####################
 def main():
-    rospy.init_node('pointcloud_extracter')
+    rospy.init_node('visualize_segmented_pointcloud')
 
     rospy.Subscriber("segmented_object", RecognizedObject, extract_pointcloud_from_msg, queue_size = 10)
     rospy.spin()
