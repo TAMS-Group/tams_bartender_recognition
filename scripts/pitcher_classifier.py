@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import rospy
-from RecognizedObject.msg import RecognizedObject
+from tams_bartender_recognition.msg import RecognizedObject
 from sensor_msgs.msg import PointCloud2
 
 ####################
