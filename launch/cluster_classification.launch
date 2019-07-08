@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<launch>
+  <node name="tabletop_segmentation" pkg="tams_bartender_recognition" type="object_segmentation">
+    <param name="enabled" value="true"/>
+    <remap from="camera/depth_registered/points" to="kinect2/hd/points" />
+  </node>
+
+  <node name="pitcher_stub_classification" pkg="tams_bartender_recognition" type="pitcher_classifier.py" />
+
+  <node name="visualize_pointcloud" pkg="tams_bartender_recognition" type="visualize_pointcloud.py">
+    <remap from="segmented_object" to="classified_object" />
+  </node>
+
+</launch>
