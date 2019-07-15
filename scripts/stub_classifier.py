@@ -14,7 +14,7 @@ pub = rospy.Publisher("classified_object", RecognizedObject,  queue_size=10)
 # fills the pointcloud with label
 ####################
 def classifies_object_in_pointcloud(recognized_object_msg):
-    recognized_object_msg.class_label = "019_pitcher_base"
+    recognized_object_msg.class_label = rospy.get_param("~class", "011_banana")
     pub.publish(recognized_object_msg)
 
 
