@@ -27,7 +27,7 @@ def main():
     rospy.spin()
 
 ####################
-# starts the main and thus the node 
+# starts the main and thus the node
 ####################
 if __name__ == '__main__':
     main()

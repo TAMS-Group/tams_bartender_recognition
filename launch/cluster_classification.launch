@@ -7,7 +7,7 @@
 
   <node name="pitcher_stub_classification" pkg="tams_bartender_recognition" type="pitcher_classifier.py" />
 
-  <node name="visualize_pointcloud" pkg="tams_bartender_recognition" type="visualize_pointcloud.py">
+  <node name="visualize_pointcloud" pkg="tams_bartender_recognition" type="extract_pointcloud.py">
     <remap from="segmented_object" to="classified_object" />
   </node>
 
