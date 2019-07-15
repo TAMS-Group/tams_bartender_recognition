@@ -1,9 +1,11 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="class" default="019_pitcher_base" />
+  <arg name="max_range" default="1.10" />
 
   <node name="tabletop_segmentation" pkg="tams_bartender_recognition" type="object_segmentation">
     <param name="enabled" value="true"/>
+    <param name="max_range" value="$(arg max_range)"/>
     <remap from="camera/depth_registered/points" to="kinect2/hd/points" />
   </node>
 

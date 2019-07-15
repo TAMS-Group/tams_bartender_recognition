@@ -72,6 +72,8 @@ ros::Time start_time_;
 tf::Transform surface_tf;
 tf::Transform cyl_tf;
 
+double max_range;
+
 std::map<int,tf::Transform> object_transforms;
 std::map<int, ros::Publisher> image_pubs;
 
@@ -472,7 +474,7 @@ void callback (const pcl::PCLPointCloud2ConstPtr& cloud_pcl2) {
 
   // filter range of view
   //TODO replace filter_range by filterprismeticvolume on top of table
-  filterRange(1.10, cloud, *cloud_filtered);
+  filterRange(max_range, cloud, *cloud_filtered);
   if(cloud_filtered->size() == 0)
     return;
 
@@ -582,6 +584,8 @@ int main (int argc, char** argv)
   ros::init (argc, argv, "tams_bartender_recognition");
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
+
+  max_range = pnh.param<double>("max_range", 1.10);
 
   point_cloud_topic_ = pnh.param<std::string>("point_cloud_topic", "/camera/depth_registered/points");
   surface_frame_ = pnh.param<std::string>("surface_frame", "/surface");
